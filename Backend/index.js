@@ -13,7 +13,7 @@ dotenv.config();
 // Connect to MongoDB
 connectDB();
 
-const DEFAULT_PORT = process.env.PORT || 4000;
+const DEFAULT_PORT = process.env.PORT || 10000;
 
 // Function to check if port is available
 const isPortAvailable = (port) => {
@@ -49,23 +49,35 @@ const findAvailablePort = async (startPort) => {
   throw new Error(`❌ No available ports found between ${startPort} and ${maxPort}`);
 };
 
-// Enhanced CORS configuration - Allow all origins for development
-app.use(cors({
-  origin: [
-    "http://localhost:3000", 
-    "http://localhost:3001",
-    "http://localhost:3002", 
-    "http://localhost:3003",
-    "http://localhost:3004",
-    "http://localhost:5173", 
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:3003",
-    "http://localhost:5174",
-    "http://127.0.0.1:5173",
-    "http://localhost:5175",
-    "http://localhost:4173", // Vite preview
-    "http://127.0.0.1:4173"
-  ],
+// Dynamic CORS configuration for production
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      "http://localhost:3000", 
+      "http://localhost:5173",
+      "http://localhost:4173",
+      "https://aditya-auchar-portfolio.netlify.app", // Your Netlify domain
+      "https://*.netlify.app", // All Netlify subdomains
+      /\.netlify\.app$/, // Regex for Netlify domains
+      process.env.CORS_ORIGIN // From environment variable
+    ].filter(Boolean);
+    
+    if (allowedOrigins.some(allowedOrigin => {
+      if (typeof allowedOrigin === 'string') {
+        return origin === allowedOrigin;
+      } else if (allowedOrigin instanceof RegExp) {
+        return allowedOrigin.test(origin);
+      }
+      return false;
+    })) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS blocked for origin: ${origin}`));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
   credentials: true,
   allowedHeaders: [
@@ -83,10 +95,12 @@ app.use(cors({
   ],
   preflightContinue: false,
   optionsSuccessStatus: 204
-}));
+};
+
+app.use(cors(corsOptions));
 
 // Handle preflight requests
-app.options('*', cors());
+app.options('*', cors(corsOptions));
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
@@ -145,11 +159,12 @@ app.get("/api/health", async (req, res) => {
       databaseName: databaseName,
       totalUsers: userCount,
       timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'development',
+      environment: process.env.NODE_ENV || 'production',
       server: {
         port: process.env.SERVER_PORT || DEFAULT_PORT,
         nodeVersion: process.version,
-        platform: process.platform
+        platform: process.platform,
+        renderUrl: process.env.RENDER_EXTERNAL_URL || "Not on Render"
       },
       databaseStats: {
         collections: databaseStats.collections || 0,
@@ -191,7 +206,8 @@ app.get("/api/test", (req, res) => {
       server: "Express.js",
       database: "MongoDB Atlas",
       status: "Operational",
-      connection: "aditya-protfolio database"
+      connection: "aditya-protfolio database",
+      deployment: "Hosted on Render"
     }
   });
 });
@@ -259,7 +275,8 @@ app.get("/health", async (req, res) => {
     databaseName: mongoose.connection.name || "Not connected",
     totalUsers: userCount,
     timestamp: new Date().toISOString(),
-    message: "Backend server is running with MongoDB Atlas! 🎉"
+    message: "Backend server is running with MongoDB Atlas! 🎉",
+    deployment: "Hosted on Render"
   });
 });
 
@@ -271,7 +288,8 @@ app.get("/api/hello", (req, res) => {
     database: dbStatus,
     databaseName: mongoose.connection.name || "Not connected",
     timestamp: new Date().toISOString(),
-    version: "2.0.0"
+    version: "2.0.0",
+    hostedOn: "Render"
   });
 });
 
@@ -283,6 +301,7 @@ app.get("/", (req, res) => {
     version: "2.0.0",
     database: mongoose.connection.readyState === 1 ? "Connected ✅" : "Disconnected ❌",
     timestamp: new Date().toISOString(),
+    deployment: "Hosted on Render",
     endpoints: {
       health: "GET /api/health",
       contact: "POST /api/contact",
@@ -290,10 +309,7 @@ app.get("/", (req, res) => {
       test: "GET /api/test",
       documentation: "Check /api/health for all endpoints"
     },
-    instructions: {
-      frontend: `Set VITE_API_URL to http://localhost:${process.env.SERVER_PORT || DEFAULT_PORT}`,
-      test: "Run node test-db.js to test database connection"
-    }
+    frontend: "Hosted on Netlify"
   });
 });
 
@@ -363,26 +379,18 @@ const startServer = async () => {
       console.log(`👥 Users API: http://localhost:${availablePort}/users`);
       console.log(`📧 Contact form: http://localhost:${availablePort}/api/contact`);
       console.log(`🧪 Test endpoint: http://localhost:${availablePort}/api/test`);
-      console.log(`🌐 Frontend should connect to: http://localhost:${availablePort}`);
       console.log(`💾 Database: ${mongoose.connection.readyState === 1 ? 'Connected ✅' : 'Disconnected ❌'}`);
       console.log(`⏰ Server started at: ${new Date().toISOString()}`);
+      console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
       
-      if (availablePort !== parseInt(DEFAULT_PORT)) {
-        console.log(`\n💡 IMPORTANT: Port ${DEFAULT_PORT} was busy, using port ${availablePort} instead`);
-        console.log(`   Update your frontend .env file:`);
-        console.log(`   VITE_API_URL=http://localhost:${availablePort}`);
+      if (process.env.RENDER_EXTERNAL_URL) {
+        console.log(`🔗 Render URL: ${process.env.RENDER_EXTERNAL_URL}`);
       }
       
       console.log(`=========================================`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error.message);
-    console.log('\n💡 Please try one of these solutions:');
-    console.log('   1. Kill processes using ports 4000-4010:');
-    console.log('      netstat -ano | findstr :4000');
-    console.log('      taskkill /PID <PID> /F');
-    console.log('   2. Change PORT in .env file to 5001');
-    console.log('   3. Wait a few minutes and try again');
     process.exit(1);
   }
 };

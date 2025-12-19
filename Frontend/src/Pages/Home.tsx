@@ -69,41 +69,42 @@ const Home = () => {
   const technologies = ['React', 'Node.js', 'TypeScript', 'MongoDB', 'Express', 'Tailwind'];
 
   return (
-    <section id="home" className="relative min-h-screen flex items-center justify-center overflow-hidden pt-12">
+    <section id="home" className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16 md:pt-20 lg:pt-12">
       {/* Background Elements */}
-      <div className="absolute inset-0 bg-linear-to-br from-gray-50 to-white">
-        <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-red-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
-        <div className="absolute top-1/3 right-1/4 w-72 h-72 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse delay-1000"></div>
-        <div className="absolute bottom-1/4 left-1/2 w-72 h-72 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse delay-1500"></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-gray-50 to-white">
+        <div className="absolute top-1/4 left-4 md:left-1/4 w-48 h-48 md:w-72 md:h-72 bg-red-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
+        <div className="absolute top-1/3 right-4 md:right-1/4 w-48 h-48 md:w-72 md:h-72 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse delay-1000"></div>
+        <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 w-48 h-48 md:w-72 md:h-72 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse delay-1500"></div>
       </div>
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-0 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 lg:gap-12 items-center">
           {/* Text Content */}
-          <div className={`text-center lg:text-left transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'} -mt-40`}>
+          <div className={`text-center lg:text-left transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'} order-2 lg:order-1 mt-8 md:mt-12 lg:mt-0`}>
             {/* Welcome Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-full mb-12">
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-              <span className="text-sm font-medium text-red-700">Welcome to my portfolio</span>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-red-50 border border-red-200 rounded-full mb-6 md:mb-8 lg:mb-12">
+              <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-red-500 rounded-full animate-pulse"></div>
+              <span className="text-xs md:text-sm font-medium text-red-700">Welcome to my portfolio</span>
             </div>
 
-            {/* Animated Role Text with Smooth Transition */}
-            <div className="h-16 mb-6 flex items-center justify-center lg:justify-start">
-              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-gray-700">
+            {/* Animated Role Text with Smooth Transition - Fixed responsive height */}
+            <div className="min-h-[3rem] md:min-h-[3.5rem] lg:min-h-[4rem] mb-4 md:mb-6 flex items-center justify-center lg:justify-start">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-gray-800 leading-tight">
                 <span 
                   className={`
-                    bg-linear-to-r from-gray-700 to-gray-900 bg-clip-text text-transparent
+                    bg-gradient-to-r from-gray-800 to-gray-900 bg-clip-text text-transparent
                     transition-all duration-500 ease-in-out
                     ${isTransitioning ? 'opacity-0 transform translate-y-4' : 'opacity-100 transform translate-y-0'}
+                    block
                   `}
                 >
                   {roles[textIndex]}
                 </span>
-              </h2>
+              </h1>
             </div>
 
             {/* Description */}
-            <p className="text-lg sm:text-xl text-gray-600 leading-relaxed mb-6 max-w-2xl">
+            <p className="text-sm sm:text-base md:text-lg lg:text-xl text-gray-600 leading-relaxed mb-4 md:mb-6 max-w-2xl">
               I'm a {" "}
               <strong className="text-gray-900">Full Stack Developer</strong> with{" "}
               <strong className="text-red-600">1+ years</strong> of experience building 
@@ -116,25 +117,25 @@ const Home = () => {
             </p>
 
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-3 mb-6 max-w-md mx-auto lg:mx-0 mt-12">
+            <div className="grid grid-cols-3 gap-2 md:gap-3 mb-6 max-w-md mx-auto lg:mx-0 mt-6 md:mt-8 lg:mt-12">
               {stats.map((stat, index) => (
                 <div 
                   key={index}
-                  className="text-center p-3 rounded-2xl bg-white/50 backdrop-blur-sm border border-gray-200/50 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105"
+                  className="text-center p-2 md:p-3 rounded-xl md:rounded-2xl bg-white/70 backdrop-blur-sm border border-gray-200/70 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105"
                 >
-                  <div className="text-xl font-bold bg-linear-to-r from-red-600 to-red-400 bg-clip-text text-transparent">
+                  <div className="text-lg md:text-xl font-bold bg-gradient-to-r from-red-600 to-red-500 bg-clip-text text-transparent">
                     {stat.number}
                   </div>
-                  <div className="text-xs text-gray-600 mt-1">{stat.label}</div>
+                  <div className="text-xs text-gray-600 mt-0.5 md:mt-1 font-medium">{stat.label}</div>
                 </div>
               ))}
             </div>
 
             {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mb-9 mt-9">
+            <div className="flex flex-col sm:flex-row gap-2 md:gap-3 justify-center lg:justify-start mb-6 md:mb-9 mt-6 md:mt-9">
               <button
                 onClick={() => handleNavigation('#projects')}
-                className="group flex items-center justify-center gap-2 px-6 py-3 bg-linear-to-r from-red-600 to-red-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-300"
+                className="group flex items-center justify-center gap-2 px-4 py-3 md:px-6 md:py-3.5 bg-gradient-to-r from-red-600 to-red-500 text-white font-semibold rounded-lg md:rounded-xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-300 text-sm md:text-base flex-1 sm:flex-none"
               >
                 <span>View My Work</span>
                 <div className="group-hover:translate-x-1 transition-transform duration-300">→</div>
@@ -142,26 +143,26 @@ const Home = () => {
 
               <button
                 onClick={() => handleNavigation('#contact')}
-                className="group flex items-center justify-center gap-2 px-6 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:border-red-300 hover:bg-red-50 hover:text-red-600 hover:scale-105 active:scale-95 transition-all duration-300"
+                className="group flex items-center justify-center gap-2 px-4 py-3 md:px-6 md:py-3.5 border border-gray-300 md:border-2 text-gray-700 font-semibold rounded-lg md:rounded-xl hover:border-red-300 hover:bg-red-50 hover:text-red-600 hover:scale-105 active:scale-95 transition-all duration-300 text-sm md:text-base flex-1 sm:flex-none"
               >
                 <span>Contact Me</span>
               </button>
 
               <button
                 onClick={handleDownloadCV}
-                className="group flex items-center justify-center gap-2 px-4 py-3 text-gray-600 font-medium rounded-xl hover:text-red-600 hover:scale-105 active:scale-95 transition-all duration-300"
+                className="group flex items-center justify-center gap-2 px-4 py-3 md:px-5 md:py-3.5 text-gray-700 font-semibold rounded-lg md:rounded-xl border border-gray-300 hover:border-red-300 hover:text-red-600 hover:scale-105 active:scale-95 transition-all duration-300 text-sm md:text-base flex-1 sm:flex-none"
               >
-                <DownloadIcon sx={{ fontSize: "1.2rem" }} />
+                <DownloadIcon className="w-4 h-4 md:w-5 md:h-5" />
                 <span>Download CV</span>
               </button>
             </div>
 
             {/* Quick Links */}
-            <div className="flex flex-wrap items-center gap-3 justify-center lg:justify-start">
+            <div className="flex flex-wrap items-center gap-2 md:gap-3 justify-center lg:justify-start">
               {technologies.map((tech) => (
                 <div
                   key={tech}
-                  className="px-3 py-1 bg-white/50 backdrop-blur-sm border border-gray-200 rounded-full text-sm text-gray-600 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-all duration-300"
+                  className="px-3 py-1.5 md:px-3.5 md:py-1.5 bg-white/70 backdrop-blur-sm border border-gray-200 rounded-lg md:rounded-full text-xs md:text-sm text-gray-700 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-all duration-300 font-medium"
                 >
                   {tech}
                 </div>
@@ -170,46 +171,47 @@ const Home = () => {
           </div>
 
           {/* Profile Image - Large Circular Design */}
-          <div className={`flex justify-center lg:justify-end transition-all duration-700 delay-200 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
+          <div className={`flex justify-center lg:justify-end transition-all duration-700 delay-200 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'} order-1 lg:order-2`}>
             <div className="relative">
               {/* Background Gradient Circle */}
-              <div className="absolute inset-0 bg-linear-to-br from-blue-500 via-purple-500 to-red-500 rounded-full blur-2xl opacity-20 animate-pulse"></div>
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500 via-purple-500 to-red-500 rounded-full blur-xl md:blur-2xl opacity-20 animate-pulse"></div>
               
               {/* Main Circular Image Container */}
               <div className="relative group">
                 {/* Outer Glow Effect */}
-                <div className="absolute -inset-6 bg-linear-to-r from-blue-400 to-purple-500 rounded-full opacity-0 group-hover:opacity-30 blur-lg transition-all duration-500"></div>
+                <div className="absolute -inset-3 md:-inset-4 lg:-inset-6 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full opacity-0 group-hover:opacity-30 blur-lg transition-all duration-500"></div>
                 
-                {/* Large Circular Image with Perfect Fit */}
-                <div className="relative w-96 h-96 lg:w-md lg:h-112 rounded-full shadow-2xl border-8 border-white bg-white overflow-hidden">
-                  <img
+                {/* Responsive Circular Image Container */}
+                <div className="relative w-64 h-64 sm:w-72 sm:h-72 md:w-80 md:h-80 lg:w-96 lg:h-96 xl:w-[28rem] xl:h-[28rem] rounded-full shadow-2xl border-4 md:border-6 lg:border-8 border-white bg-white overflow-hidden">
+                  <img 
                     src={profileImg}
                     alt="Aditya Auchar - Full Stack Developer"
-                    className="w-full h-full object-cover object-center"
+                    className="w-full h-full object-cover object-center scale-110 sm:scale-115 md:scale-120 lg:scale-125"
+                    loading="eager"
                   />
                   
                   {/* Subtle Hover Overlay */}
-                  <div className="absolute inset-0 bg-linear-to-br from-blue-500/10 to-purple-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-full"></div>
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-full"></div>
                 </div>
 
               </div>
 
-              {/* Large Animated Rings */}
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-lg h-128 border-2 border-blue-300/30 rounded-full animate-pulse opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-xl h-144 border-2 border-purple-300/20 rounded-full animate-pulse delay-300 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+              {/* Responsive Animated Rings */}
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[17rem] h-[17rem] sm:w-[19rem] sm:h-[19rem] md:w-[22rem] md:h-[22rem] lg:w-[26rem] lg:h-[26rem] xl:w-[32rem] xl:h-[32rem] border-2 border-blue-300/30 rounded-full animate-pulse opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[19rem] h-[19rem] sm:w-[21rem] sm:h-[21rem] md:w-[24rem] md:h-[24rem] lg:w-[28rem] lg:h-[28rem] xl:w-[34rem] xl:h-[34rem] border-2 border-purple-300/20 rounded-full animate-pulse delay-300 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
             </div>
           </div>
         </div>
 
         {/* Scroll Indicator */}
-        <div className="absolute -bottom-45 left-1/2 transform -translate-x-1/2 animate-bounce">
+        <div className="absolute -bottom-14 md:-bottom-16 lg:-bottom-20 left-1/2 transform -translate-x-1/2 animate-bounce mt-8 md:mt-12 -mb-5">
           <button
             onClick={() => handleNavigation('#about')}
-            className="flex flex-col items-center gap-1 text-gray-400 hover:text-red-600 transition-colors duration-300"
+            className="flex flex-col items-center gap-1 text-gray-500 hover:text-red-600 transition-colors duration-300"
             aria-label="Scroll to next section"
           >
             <span className="text-xs font-medium">Explore More</span>
-            <ArrowDownwardIcon sx={{ fontSize: "1.2rem" }} />
+            <ArrowDownwardIcon className="w-4 h-4 md:w-5 md:h-5" />
           </button>
         </div>
       </div>

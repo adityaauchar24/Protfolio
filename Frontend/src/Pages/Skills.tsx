@@ -277,7 +277,7 @@ const Skills = () => {
         `}
       </style>
 
-      <section id="skills" ref={sectionRef} className="relative py-20 lg:py-28 overflow-hidden">
+      <section id="skills" ref={sectionRef} className="relative py-20 lg:py-28 overflow-hidden ">
         {/* Light Background Elements */}
         <div className="absolute top-0 left-0 w-80 h-80 bg-blue-50 rounded-full mix-blend-multiply opacity-40 animate-soft-float"></div>
         <div className="absolute bottom-0 right-0 w-80 h-80 bg-cyan-50 rounded-full mix-blend-multiply opacity-40 animate-soft-float-delayed"></div>

@@ -6,9 +6,28 @@ import LocationPinIcon from "@mui/icons-material/LocationPin";
 import SendIcon from "@mui/icons-material/Send";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
+import WifiOffIcon from "@mui/icons-material/WifiOff";
+import CloudOffIcon from "@mui/icons-material/CloudOff";
+import StorageIcon from "@mui/icons-material/Storage";
 
-// Use Vite environment variable
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
+// Environment Configuration
+const getApiUrl = (): string => {
+  // Check if we're in development mode
+  const isDevelopment = import.meta.env.DEV;
+  
+  // Get the API URL from environment variable or use default
+  const envApiUrl = import.meta.env.VITE_API_URL;
+  
+  // If environment variable is set, use it
+  if (envApiUrl && envApiUrl !== "http://localhost:4000") {
+    return envApiUrl;
+  }
+  
+  // Default to Render backend for production
+  return "https://aditya-auchar-portfolio-backend.onrender.com";
+};
+
+const API_URL = getApiUrl();
 
 // TypeScript interfaces
 interface ContactInfo {
@@ -48,14 +67,32 @@ interface BackendResponse {
   details?: string[];
 }
 
+interface BackendHealth {
+  status: string;
+  database: string;
+  databaseName: string;
+  totalUsers: number;
+  timestamp: string;
+  environment: string;
+  server: {
+    port: number;
+    nodeVersion: string;
+    platform: string;
+    renderUrl?: string;
+  };
+}
+
 const Contact = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<Message>({ type: "", mess: "" });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [backendStatus, setBackendStatus] = useState<"checking" | "connected" | "disconnected">("checking");
-  const [, setBackendDetails] = useState<string>("");
-  const [, setTotalSubmissions] = useState<number>(0);
+  const [backendDetails, setBackendDetails] = useState<string>("Checking backend connection...");
+  const [totalSubmissions, setTotalSubmissions] = useState<number>(0);
+  const [backendUrl, setBackendUrl] = useState<string>(API_URL);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [connectionAttempts, setConnectionAttempts] = useState<number>(0);
   const sectionRef = useRef<HTMLElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -133,14 +170,21 @@ const Contact = () => {
 
   const testBackendConnection = async (): Promise<boolean> => {
     try {
-      console.log(`🧪 Testing backend connection to: ${API_URL}/api/test`);
+      console.log(`🧪 Testing backend connection to: ${backendUrl}/api/test`);
+      console.log(`🔄 Connection attempt: ${connectionAttempts + 1}`);
       
-      const response = await fetch(`${API_URL}/api/test`, {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased timeout for Render cold starts
+      
+      const response = await fetch(`${backendUrl}/api/test`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       if (response.ok) {
         const data = await response.json();
@@ -148,7 +192,7 @@ const Contact = () => {
         return true;
       }
       return false;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("❌ Backend test failed:", error);
       return false;
     }
@@ -156,35 +200,49 @@ const Contact = () => {
 
   const checkBackendConnection = async (): Promise<boolean> => {
     try {
+      setConnectionAttempts(prev => prev + 1);
       setBackendStatus("checking");
       setBackendDetails("Checking backend connection...");
       
-      console.log(`🔗 Testing backend connection to: ${API_URL}/api/health`);
+      console.log(`🔗 Testing backend connection to: ${backendUrl}/api/health`);
+      console.log(`🌐 Current API URL: ${backendUrl}`);
+      console.log(`📊 Environment: ${import.meta.env.MODE}`);
+      console.log(`🎯 VITE_API_URL from env: ${import.meta.env.VITE_API_URL}`);
       
-      // First test basic connectivity
-      const isReachable = await testBackendConnection();
-      if (!isReachable) {
-        setBackendStatus("disconnected");
-        setBackendDetails("Backend server is not reachable. Make sure it's running on localhost:4000.");
-        return false;
+      // For Render free tier, we need to handle cold starts
+      if (connectionAttempts === 0) {
+        setBackendDetails("First connection attempt (Render free tier may take 30-60s to start)...");
       }
       
-      const response = await fetch(`${API_URL}/api/health`, {
+      // Test health endpoint with longer timeout for Render cold starts
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds for first connection
+      
+      const response = await fetch(`${backendUrl}/api/health`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       console.log(`📡 Response status: ${response.status}`);
       
       if (response.ok) {
-        const data = await response.json();
+        const data: BackendHealth = await response.json();
         console.log("✅ Backend health check successful:", data);
         
         setBackendStatus("connected");
         setBackendDetails(`Database: ${data.database} | Total Submissions: ${data.totalUsers || 0}`);
         setTotalSubmissions(data.totalUsers || 0);
+        
+        // Show Render URL if available
+        if (data.server?.renderUrl) {
+          setBackendUrl(data.server.renderUrl);
+        }
+        
         return true;
       } else {
         console.error("❌ Backend health check failed:", response.status);
@@ -192,12 +250,44 @@ const Contact = () => {
         setBackendDetails(`HTTP ${response.status} - Backend not responding properly`);
         return false;
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("❌ Backend connection error:", error);
       setBackendStatus("disconnected");
-      setBackendDetails("Cannot connect to backend server. Make sure it's running on localhost:4000.");
+      
+      // Type-safe error handling
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          setBackendDetails("Connection timeout (30s). The backend server is starting up. Render free tier has cold starts.");
+        } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+          setBackendDetails("Network error. Please check your internet connection and try again.");
+        } else {
+          setBackendDetails(`Cannot connect to backend: ${error.message || 'Unknown error'}`);
+        }
+      } else if (typeof error === 'string') {
+        setBackendDetails(`Cannot connect to backend: ${error}`);
+      } else {
+        setBackendDetails("Cannot connect to backend: Unknown error occurred");
+      }
+      
+      // Special handling for Render cold starts
+      if (connectionAttempts < 3) {
+        setBackendDetails(prev => prev + " Retrying in 5 seconds...");
+        setTimeout(() => {
+          if (backendStatus === "disconnected") {
+            retryBackendConnection();
+          }
+        }, 5000);
+      }
+      
       return false;
+    } finally {
+      setIsRetrying(false);
     }
+  };
+
+  const retryBackendConnection = async () => {
+    setIsRetrying(true);
+    await checkBackendConnection();
   };
 
   const validateForm = (): boolean => {
@@ -258,27 +348,30 @@ const Contact = () => {
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     console.log("📝 Form submitted");
+    console.log("🌐 Using API URL:", backendUrl);
     
     if (!validateForm()) {
       setMessage({ type: "error", mess: "Please fix the validation errors above" });
       return;
     }
 
-    // Check backend connection before submitting
-    const isConnected = await checkBackendConnection();
-    if (!isConnected) {
-      setMessage({ 
-        type: "error", 
-        mess: "Backend server is not reachable. Please make sure the backend is running on localhost:4000." 
-      });
-      return;
+    // If backend is disconnected, try to connect first
+    if (backendStatus !== "connected") {
+      const isConnected = await checkBackendConnection();
+      if (!isConnected) {
+        setMessage({ 
+          type: "error", 
+          mess: "Backend server is not reachable. Please wait a moment and try again. Render free tier servers spin down after inactivity." 
+        });
+        return;
+      }
     }
 
     setIsSubmitting(true);
     console.log("🔄 Submitting form...");
 
     try {
-      console.log("🌐 API URL:", API_URL);
+      console.log("🌐 API URL:", backendUrl);
       
       // Prepare data according to backend schema
       const requestData = {
@@ -292,8 +385,8 @@ const Contact = () => {
 
       // Try multiple endpoints for better compatibility
       const endpoints = [
-        "/users",
         "/api/contact",
+        "/users",
         "/contact",
         "/api/send-message",
         "/send-message",
@@ -306,22 +399,28 @@ const Contact = () => {
       
       for (const endpoint of endpoints) {
         try {
-          console.log(`🔄 Trying endpoint: ${API_URL}${endpoint}`);
+          console.log(`🔄 Trying endpoint: ${backendUrl}${endpoint}`);
           
-          const response = await fetch(`${API_URL}${endpoint}`, {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds for Render
+          
+          const response = await fetch(`${backendUrl}${endpoint}`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
             body: JSON.stringify(requestData),
+            signal: controller.signal
           });
 
+          clearTimeout(timeoutId);
+          
           console.log(`📨 Response from ${endpoint}:`, response.status);
           
           const data: BackendResponse = await response.json();
           console.log(`📊 Response data from ${endpoint}:`, data);
 
-          if (response.ok && (data.success || data._message === "Successfully submitted")) {
+          if (response.ok && (data.success || data._message === "Successfully submitted" || data.message?.includes("success"))) {
             console.log("✅ Data successfully saved to MongoDB Atlas with ID:", data.id);
             setMessage({ 
               type: "success", 
@@ -345,12 +444,28 @@ const Contact = () => {
             
             // If we get a 409 conflict (duplicate submission), break early
             if (response.status === 409) {
+              setMessage({
+                type: "error",
+                mess: "You have already submitted a similar message recently. Please wait before submitting again."
+              });
               break;
             }
           }
-        } catch (endpointError) {
+        } catch (endpointError: unknown) {
           console.error(`❌ Endpoint ${endpoint} failed:`, endpointError);
-          lastError = `Network error: ${endpointError instanceof Error ? endpointError.message : 'Cannot connect to server'}`;
+          
+          // Type-safe error handling
+          if (endpointError instanceof Error) {
+            if (endpointError.name === 'AbortError') {
+              lastError = "Request timeout (30s). The backend is starting up. Please try again in a moment.";
+            } else {
+              lastError = `Network error: ${endpointError.message || 'Cannot connect to server'}`;
+            }
+          } else if (typeof endpointError === 'string') {
+            lastError = `Error: ${endpointError}`;
+          } else {
+            lastError = "Network error: Cannot connect to server";
+          }
         }
       }
 
@@ -362,11 +477,19 @@ const Contact = () => {
         });
       }
 
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("❌ API call failed:", error);
+      
+      let errorMessage = "Please check your connection and try again.";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
       setMessage({ 
         type: "error", 
-        mess: `Network error: ${error instanceof Error ? error.message : 'Please check your connection and try again.'}` 
+        mess: `Error: ${errorMessage}` 
       });
     } finally {
       setIsSubmitting(false);
@@ -408,7 +531,31 @@ const Contact = () => {
     );
   };
 
+  const getBackendStatusIcon = () => {
+    switch (backendStatus) {
+      case "connected":
+        return <StorageIcon className="text-green-500" />;
+      case "checking":
+        return <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />;
+      case "disconnected":
+        return <CloudOffIcon className="text-red-500" />;
+      default:
+        return <WifiOffIcon className="text-yellow-500" />;
+    }
+  };
 
+  const getBackendStatusColor = () => {
+    switch (backendStatus) {
+      case "connected":
+        return "bg-green-50 border-green-200 text-green-800";
+      case "checking":
+        return "bg-blue-50 border-blue-200 text-blue-800";
+      case "disconnected":
+        return "bg-red-50 border-red-200 text-red-800";
+      default:
+        return "bg-yellow-50 border-yellow-200 text-yellow-800";
+    }
+  };
 
   return (
     <>
@@ -502,12 +649,91 @@ const Contact = () => {
                 </div>
 
                 {/* Backend Status Indicator */}
-                <div className="mt-8 p-4 rounded-2xl transition-all duration-300">
-                  <div className={`p-4 rounded-xl`}>
+                <div className="mt-8">
+                  <div className={`p-4 rounded-2xl border transition-all duration-300 ${getBackendStatusColor()}`}>
                     <div className="flex items-center justify-between mb-2">
-                      
+                      <div className="flex items-center gap-2">
+                        {getBackendStatusIcon()}
+                        <span className="font-semibold">
+                          Backend Status:{" "}
+                          <span className={
+                            backendStatus === "connected" 
+                              ? "text-green-600" 
+                              : backendStatus === "checking" 
+                              ? "text-blue-600" 
+                              : "text-red-600"
+                          }>
+                            {backendStatus.charAt(0).toUpperCase() + backendStatus.slice(1)}
+                          </span>
+                        </span>
+                      </div>
+                      {backendStatus === "connected" && totalSubmissions > 0 && (
+                        <span className="text-xs font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                          {totalSubmissions} submissions
+                        </span>
+                      )}
                     </div>
-
+                    
+                    <div className="text-sm mb-3">
+                      {backendDetails}
+                      {connectionAttempts > 0 && (
+                        <span className="text-xs text-gray-500 ml-2">
+                          (Attempt {connectionAttempts})
+                        </span>
+                      )}
+                    </div>
+                    
+                    {backendStatus === "disconnected" && (
+                      <div className="space-y-2">
+                        <p className="text-xs text-red-600">
+                          ⚠️ Important: Render free tier spins down after 15 minutes of inactivity.
+                          First request may take 30-60 seconds to wake up the server.
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={retryBackendConnection}
+                            disabled={isRetrying}
+                            className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 disabled:opacity-50"
+                          >
+                            {isRetrying ? (
+                              <>
+                                <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                                Retrying...
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                Retry Connection
+                              </>
+                            )}
+                          </button>
+                          <span className="text-xs text-gray-500">
+                            Will auto-retry...
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="mt-3 pt-3 border-t border-gray-200/50">
+                      <div className="text-xs text-gray-500 flex items-center gap-1">
+                        <StorageIcon sx={{ fontSize: "0.8rem" }} />
+                        Database: MongoDB Atlas
+                      </div>
+                      <div className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm6 14h-12v-4h12v4z"/>
+                        </svg>
+                        Backend: Render (Node.js) - Free Tier
+                      </div>
+                      <div className="text-xs text-gray-500 truncate mt-1" title={backendUrl}>
+                        URL: {backendUrl}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        {import.meta.env.MODE === 'development' ? 'Development Mode' : 'Production Mode'}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -620,12 +846,27 @@ const Contact = () => {
                   </button>
                 </form>
 
-                <div className="mt-6 text-center">
-                  <div className="text-xs text-gray-500">
+                <div className="mt-6 space-y-3">
+                  <div className="text-xs text-gray-500 text-center">
                     {backendStatus === "connected" 
                       ? "✅ Form data will be permanently saved to MongoDB Atlas database (aditya-protfolio)"
                       : "❌ Backend server required to save data permanently"
                     }
+                  </div>
+                  
+                  {backendStatus === "connected" && (
+                    <div className="text-center">
+                      <div className="inline-flex items-center gap-2 text-xs text-green-600 bg-green-50 px-3 py-1 rounded-full">
+                        <StorageIcon sx={{ fontSize: "0.8rem" }} />
+                        Connected to MongoDB Atlas
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="text-center text-xs text-gray-400">
+                    <p>Powered by: React + Node.js + MongoDB</p>
+                    <p className="mt-1">Hosted on: Netlify (Frontend) + Render (Backend)</p>
+                    <p className="mt-1 text-gray-300">Note: Render free tier may have cold start delays</p>
                   </div>
                 </div>
               </div>

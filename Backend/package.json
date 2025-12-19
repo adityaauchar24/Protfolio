@@ -1,16 +1,18 @@
 {
-  "name": "backend",
+  "name": "aditya-auchar-portfolio-backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend API for Aditya Auchar Portfolio",
   "main": "index.js",
   "type": "module",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "node test-db.js"
+    "test": "node test-db.js",
+    "build": "echo 'No build step required for Node.js'",
+    "render-start": "node index.js"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["portfolio", "backend", "api", "contact-form"],
+  "author": "Aditya Auchar",
   "license": "ISC",
   "dependencies": {
     "cors": "^2.8.5",
@@ -22,5 +24,9 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.5",
     "nodemon": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   }
 }
