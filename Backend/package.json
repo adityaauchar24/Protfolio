@@ -1,32 +1,43 @@
 {
   "name": "aditya-auchar-portfolio-backend",
-  "version": "1.0.0",
-  "description": "Backend API for Aditya Auchar Portfolio",
+  "version": "2.0.0",
+  "description": "Backend API for Aditya Auchar Portfolio with MongoDB Atlas",
   "main": "index.js",
   "type": "module",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
     "test": "node test-db.js",
+    "test:api": "node test-api.js",
     "build": "echo 'No build step required for Node.js'",
-    "render-start": "node index.js"
+    "render-start": "node index.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
-  "keywords": ["portfolio", "backend", "api", "contact-form"],
+  "keywords": ["portfolio", "backend", "api", "contact-form", "mongodb", "express"],
   "author": "Aditya Auchar",
   "license": "ISC",
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^4.18.2",
-    "mongoose": "^8.19.3"
+    "mongoose": "^8.19.3",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.1.5"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.5",
-    "nodemon": "^3.0.0"
+    "@types/node": "^20.11.5",
+    "nodemon": "^3.0.0",
+    "eslint": "^8.56.0"
   },
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aditya-auchar/portfolio-backend"
   }
 }

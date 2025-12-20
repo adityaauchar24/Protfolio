@@ -6,12 +6,12 @@ import LocationPinIcon from "@mui/icons-material/LocationPin";
 import SendIcon from "@mui/icons-material/Send";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
+import CloudIcon from "@mui/icons-material/Cloud";
+import SyncIcon from "@mui/icons-material/Sync";
 import WifiOffIcon from "@mui/icons-material/WifiOff";
-import CloudOffIcon from "@mui/icons-material/CloudOff";
-import StorageIcon from "@mui/icons-material/Storage";
 
-// CORRECT BACKEND URL - Your actual Render backend
-const API_URL = "https://protfolio-backend-8p47.onrender.com";
+// Use your deployed backend URL
+const API_URL = import.meta.env.VITE_API_URL || "https://protfolio-backend-8p47.onrender.com";
 
 // TypeScript interfaces
 interface ContactInfo {
@@ -30,7 +30,7 @@ interface FormErrors {
 }
 
 interface Message {
-  type: string;
+  type: "success" | "error" | "info" | "warning";
   mess: string;
 }
 
@@ -41,50 +41,32 @@ interface ContactForm {
   message: string;
 }
 
-interface BackendResponse {
-  _message?: string;
-  message?: string;
-  data?: any;
-  error?: string;
-  id?: string;
-  success?: boolean;
-  details?: string[];
-}
-
-interface BackendHealth {
-  status: string;
-  database: string;
-  databaseName: string;
-  totalUsers: number;
-  timestamp: string;
-  environment: string;
-  server: {
-    port: number;
-    nodeVersion: string;
-    platform: string;
-    renderUrl?: string;
-  };
+interface BackendStatus {
+  status: "checking" | "connected" | "disconnected";
+  details: string;
+  totalSubmissions?: number;
+  lastChecked?: Date;
 }
 
 const Contact = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState<Message>({ type: "", mess: "" });
+  const [message, setMessage] = useState<Message>({ type: "info", mess: "" });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
-  const [backendStatus, setBackendStatus] = useState<"checking" | "connected" | "disconnected">("checking");
-  const [backendDetails, setBackendDetails] = useState<string>("Checking backend connection...");
-  const [totalSubmissions, setTotalSubmissions] = useState<number>(0);
-  const [backendUrl, setBackendUrl] = useState<string>(API_URL);
-  const [isRetrying, setIsRetrying] = useState(false);
-  const [connectionAttempts, setConnectionAttempts] = useState<number>(0);
+  const [backendStatus, setBackendStatus] = useState<BackendStatus>({
+    status: "checking",
+    details: "Checking backend connection...",
+    totalSubmissions: 0
+  });
+  const [isCheckingBackend, setIsCheckingBackend] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
-  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry?.isIntersecting) {
           setIsVisible(true);
+          checkBackendConnection();
         }
       },
       { threshold: 0.3 }
@@ -101,16 +83,11 @@ const Contact = () => {
   useEffect(() => {
     if (message.type) {
       const timer = setTimeout(() => {
-        setMessage({ type: "", mess: "" });
+        setMessage({ type: "info", mess: "" });
       }, 5000);
       return () => clearTimeout(timer);
     }
   }, [message]);
-
-  // Check backend connection on component mount
-  useEffect(() => {
-    checkBackendConnection();
-  }, []);
 
   const contactInfo: ContactInfo[] = [
     { 
@@ -152,112 +129,63 @@ const Contact = () => {
 
   const [contactForm, setContactForm] = useState<ContactForm>(initialForm);
 
-  const testBackendConnection = async (): Promise<boolean> => {
+  const checkBackendConnection = async (): Promise<void> => {
+    if (isCheckingBackend) return;
+    
+    setIsCheckingBackend(true);
     try {
-      console.log(`🧪 Testing backend connection to: ${backendUrl}/api/test`);
-      console.log(`🔄 Connection attempt: ${connectionAttempts + 1}`);
+      console.log(`🔗 Checking backend connection to: ${API_URL}/api/health`);
       
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-      
-      const response = await fetch(`${backendUrl}/api/test`, {
+      setBackendStatus({
+        status: "checking",
+        details: "Connecting to backend server...",
+        totalSubmissions: backendStatus.totalSubmissions
+      });
+
+      const response = await fetch(`${API_URL}/api/health`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
-        signal: controller.signal
+        // Set a timeout for the request
+        signal: AbortSignal.timeout(10000)
       });
-      
-      clearTimeout(timeoutId);
-      
+
       if (response.ok) {
         const data = await response.json();
-        console.log("✅ Backend test successful:", data);
-        return true;
+        console.log("✅ Backend connected:", data);
+        
+        setBackendStatus({
+          status: "connected",
+          details: `Connected to MongoDB Atlas | Total Submissions: ${data.totalUsers || 0}`,
+          totalSubmissions: data.totalUsers || 0,
+          lastChecked: new Date()
+        });
+        
+        setMessage({ 
+          type: "success", 
+          mess: "Backend server connected successfully!" 
+        });
+      } else {
+        throw new Error(`HTTP ${response.status}`);
       }
-      return false;
     } catch (error: unknown) {
-      console.error("❌ Backend test failed:", error);
-      return false;
-    }
-  };
-
-  const checkBackendConnection = async (): Promise<boolean> => {
-    try {
-      setConnectionAttempts(prev => prev + 1);
-      setBackendStatus("checking");
-      setBackendDetails("Checking backend connection...");
+      console.error("❌ Backend connection failed:", error);
       
-      console.log(`🔗 Testing backend connection to: ${backendUrl}/api/health`);
-      console.log(`🌐 Current API URL: ${backendUrl}`);
-      
-      if (connectionAttempts === 0) {
-        setBackendDetails("First connection attempt (Render free tier may take 30-60s to start)...");
-      }
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
-      
-      const response = await fetch(`${backendUrl}/api/health`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        signal: controller.signal
+      setBackendStatus({
+        status: "disconnected",
+        details: error instanceof Error ? error.message : "Cannot connect to backend server",
+        totalSubmissions: backendStatus.totalSubmissions,
+        lastChecked: new Date()
       });
       
-      clearTimeout(timeoutId);
-      
-      console.log(`📡 Response status: ${response.status}`);
-      
-      if (response.ok) {
-        const data: BackendHealth = await response.json();
-        console.log("✅ Backend health check successful:", data);
-        
-        setBackendStatus("connected");
-        setBackendDetails(`Database: ${data.database} | Total Submissions: ${data.totalUsers || 0}`);
-        setTotalSubmissions(data.totalUsers || 0);
-        
-        return true;
-      } else {
-        console.error("❌ Backend health check failed:", response.status);
-        setBackendStatus("disconnected");
-        setBackendDetails(`HTTP ${response.status} - Backend not responding properly`);
-        return false;
-      }
-    } catch (error: unknown) {
-      console.error("❌ Backend connection error:", error);
-      setBackendStatus("disconnected");
-      
-      if (error instanceof Error) {
-        if (error.name === 'AbortError') {
-          setBackendDetails("Connection timeout (20s). Backend might be starting up. Render free tier has cold starts.");
-        } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-          setBackendDetails("Network error. Please check your internet connection.");
-        } else {
-          setBackendDetails(`Cannot connect to backend: ${error.message || 'Unknown error'}`);
-        }
-      } else if (typeof error === 'string') {
-        setBackendDetails(`Cannot connect to backend: ${error}`);
-      } else {
-        setBackendDetails("Cannot connect to backend: Unknown error occurred");
-      }
-      
-      if (connectionAttempts < 2) {
-        setTimeout(() => {
-          retryBackendConnection();
-        }, 3000);
-      }
-      
-      return false;
+      setMessage({ 
+        type: "error", 
+        mess: "Backend server is not available. Using fallback method." 
+      });
     } finally {
-      setIsRetrying(false);
+      setIsCheckingBackend(false);
     }
-  };
-
-  const retryBackendConnection = async () => {
-    setIsRetrying(true);
-    await checkBackendConnection();
   };
 
   const validateForm = (): boolean => {
@@ -314,6 +242,57 @@ const Contact = () => {
     return `Enter your ${field}`;
   };
 
+  const submitToBackend = async (): Promise<boolean> => {
+    try {
+      console.log("📤 Submitting to backend:", `${API_URL}/api/contact`);
+      
+      const response = await fetch(`${API_URL}/api/contact`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fullname: contactForm.fullname.trim(),
+          email: contactForm.email.trim().toLowerCase(),
+          address: contactForm.address.trim(),
+          message: contactForm.message.trim()
+        }),
+        signal: AbortSignal.timeout(15000)
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        console.log("✅ Backend submission successful:", data);
+        return true;
+      } else {
+        console.error("❌ Backend submission failed:", data);
+        return false;
+      }
+    } catch (error) {
+      console.error("❌ Backend submission error:", error);
+      return false;
+    }
+  };
+
+  const openEmailFallback = (): void => {
+    const subject = `Portfolio Contact from ${contactForm.fullname.trim()}`;
+    const body = `
+Name: ${contactForm.fullname.trim()}
+Email: ${contactForm.email.trim()}
+Address: ${contactForm.address.trim()}
+
+Message:
+${contactForm.message.trim()}
+
+---
+Sent from Aditya Auchar's Portfolio Website
+    `.trim();
+
+    const mailtoLink = `mailto:adityaauchar40@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(mailtoLink, '_blank');
+  };
+
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     
@@ -322,88 +301,43 @@ const Contact = () => {
       return;
     }
 
-    if (backendStatus !== "connected") {
-      const isConnected = await checkBackendConnection();
-      if (!isConnected) {
-        setMessage({ 
-          type: "error", 
-          mess: "Backend server is not reachable. Please wait a moment and try again." 
-        });
-        return;
-      }
-    }
-
     setIsSubmitting(true);
 
     try {
-      const requestData = {
-        fullname: contactForm.fullname.trim(),
-        email: contactForm.email.trim().toLowerCase(),
-        address: contactForm.address.trim(),
-        message: contactForm.message.trim()
-      };
-
-      // Try multiple endpoints
-      const endpoints = [
-        "/api/contact",
-        "/users",
-        "/contact"
-      ];
-
-      let success = false;
-      
-      for (const endpoint of endpoints) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 15000);
-          
-          const response = await fetch(`${backendUrl}${endpoint}`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(requestData),
-            signal: controller.signal
+      // Try backend first if connected
+      if (backendStatus.status === "connected") {
+        const backendSuccess = await submitToBackend();
+        
+        if (backendSuccess) {
+          setMessage({ 
+            type: "success", 
+            mess: "Message sent successfully! Your data has been saved to MongoDB database. I'll get back to you soon!" 
           });
-
-          clearTimeout(timeoutId);
+          setContactForm(initialForm);
           
-          const data: BackendResponse = await response.json();
-
-          if (response.ok && (data.success || data._message === "Successfully submitted")) {
-            setMessage({ 
-              type: "success", 
-              mess: data._message || data.message || "Message sent successfully!" 
-            });
-            setContactForm(initialForm);
-            setFormErrors({});
-            
-            if (formRef.current) {
-              formRef.current.reset();
-            }
-            
-            // Update backend status
-            setTimeout(() => checkBackendConnection(), 1000);
-            success = true;
-            break;
-          }
-        } catch (error) {
-          console.error(`Endpoint ${endpoint} failed:`, error);
+          // Refresh backend status to get updated count
+          setTimeout(() => checkBackendConnection(), 1000);
+          return;
         }
       }
-
-      if (!success) {
-        setMessage({ 
-          type: "error", 
-          mess: "Failed to send message. Please try again later." 
-        });
-      }
-
+      
+      // Fallback to email if backend fails or disconnected
+      openEmailFallback();
+      
+      setMessage({ 
+        type: backendStatus.status === "connected" ? "warning" : "info", 
+        mess: backendStatus.status === "connected" 
+          ? "Backend submission failed. Opened email client as fallback. Please send your message from there."
+          : "Backend is disconnected. Opened email client. Please send your message from there."
+      });
+      
+      setContactForm(initialForm);
+      
     } catch (error: unknown) {
-      console.error("API call failed:", error);
+      console.error("❌ Form submission error:", error);
       setMessage({ 
         type: "error", 
-        mess: "Error submitting form. Please try again." 
+        mess: "Failed to submit form. Please try again or email me directly at adityaauchar40@gmail.com" 
       });
     } finally {
       setIsSubmitting(false);
@@ -411,7 +345,7 @@ const Contact = () => {
   };
 
   const CustomToast = (): JSX.Element | null => {
-    if (!message.type) return null;
+    if (!message.mess) return null;
 
     return (
       <div className={`
@@ -425,18 +359,28 @@ const Contact = () => {
         transform transition-all duration-500
         ${message.type === "success" 
           ? "bg-green-50 border-green-500 text-green-800" 
-          : "bg-red-50 border-red-500 text-red-800"
+          : message.type === "error"
+          ? "bg-red-50 border-red-500 text-red-800"
+          : message.type === "warning"
+          ? "bg-yellow-50 border-yellow-500 text-yellow-800"
+          : "bg-blue-50 border-blue-500 text-blue-800"
         }
         ${message.mess ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"}
       `}>
         {message.type === "success" ? (
           <CheckCircleIcon sx={{ fontSize: "1.5rem" }} />
-        ) : (
+        ) : message.type === "error" ? (
           <ErrorIcon sx={{ fontSize: "1.5rem" }} />
+        ) : message.type === "warning" ? (
+          <ErrorIcon sx={{ fontSize: "1.5rem" }} className="text-yellow-600" />
+        ) : (
+          <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
         )}
         <div>
           <div className="font-semibold">
-            {message.type === "success" ? "Success!" : "Error!"}
+            {message.type === "success" ? "Success!" : 
+             message.type === "error" ? "Error!" : 
+             message.type === "warning" ? "Warning!" : "Processing..."}
           </div>
           <div className="text-sm">{message.mess}</div>
         </div>
@@ -445,20 +389,20 @@ const Contact = () => {
   };
 
   const getBackendStatusIcon = () => {
-    switch (backendStatus) {
+    switch (backendStatus.status) {
       case "connected":
-        return <StorageIcon className="text-green-500" />;
+        return <CloudIcon className="text-green-500" />;
       case "checking":
         return <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />;
       case "disconnected":
-        return <CloudOffIcon className="text-red-500" />;
+        return <WifiOffIcon className="text-red-500" />;
       default:
-        return <WifiOffIcon className="text-yellow-500" />;
+        return <SyncIcon className="text-yellow-500" />;
     }
   };
 
   const getBackendStatusColor = () => {
-    switch (backendStatus) {
+    switch (backendStatus.status) {
       case "connected":
         return "bg-green-50 border-green-200 text-green-800";
       case "checking":
@@ -470,6 +414,16 @@ const Contact = () => {
     }
   };
 
+  const getSubmitButtonText = () => {
+    if (isSubmitting) {
+      return backendStatus.status === "connected" ? "Sending to Database..." : "Opening Email...";
+    }
+    
+    return backendStatus.status === "connected" 
+      ? "Send Message to Database" 
+      : "Send Message via Email";
+  };
+
   return (
     <>
       <style>
@@ -478,24 +432,39 @@ const Contact = () => {
             0%, 100% { transform: translateY(0px) scale(1); }
             50% { transform: translateY(-3px) scale(1.02); }
           }
+          @keyframes soft-pulse {
+            0%, 100% { opacity: 0.4; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.05); }
+          }
+          @keyframes icon-glow {
+            0%, 100% { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+            50% { box-shadow: 0 6px 20px rgba(0,0,0,0.15); }
+          }
           .animate-gentle-float {
             animation: gentle-float 4s ease-in-out infinite;
+          }
+          .animate-soft-pulse {
+            animation: soft-pulse 6s ease-in-out infinite;
+          }
+          .animate-icon-glow {
+            animation: icon-glow 3s ease-in-out infinite;
           }
         `}
       </style>
 
       <section id="contact" ref={sectionRef} className="relative overflow-hidden py-16 lg:py-24">
-        <div className="absolute top-0 left-0 w-72 h-72 bg-blue-50 rounded-full mix-blend-multiply opacity-30"></div>
-        <div className="absolute bottom-0 right-0 w-72 h-72 bg-cyan-50 rounded-full mix-blend-multiply opacity-30"></div>
+        <div className="absolute top-0 left-0 w-72 h-72 bg-blue-50 rounded-full mix-blend-multiply opacity-30 animate-soft-pulse"></div>
+        <div className="absolute bottom-0 right-0 w-72 h-72 bg-cyan-50 rounded-full mix-blend-multiply opacity-30 animate-soft-pulse delay-2000"></div>
+        <div className="absolute top-1/2 left-1/3 w-60 h-60 bg-sky-50 rounded-full mix-blend-multiply opacity-25 animate-soft-pulse delay-4000"></div>
         
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className={`text-center mb-16 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
             <div className="inline-flex items-center gap-3 mb-4">
-              <div className="w-6 h-0.5 bg-linear-to-r from-blue-300 to-blue-200"></div>
+              <div className="w-6 h-0.5 bg-gradient-to-r from-blue-300 to-blue-200"></div>
               <span className="text-sm font-semibold text-blue-600 uppercase tracking-wider bg-blue-50 px-3 py-1 rounded-full">
                 Get In Touch
               </span>
-              <div className="w-6 h-0.5 bg-linear-to-r from-blue-200 to-blue-300"></div>
+              <div className="w-6 h-0.5 bg-gradient-to-r from-blue-200 to-blue-300"></div>
             </div>
             <h2 className="text-4xl lg:text-5xl font-bold text-gray-800 mb-4">
               Let's Work Together
@@ -509,7 +478,7 @@ const Contact = () => {
             <div className={`transition-all duration-700 delay-200 ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-10'}`}>
               <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 lg:p-10 shadow-lg border border-gray-100">
                 <h3 className="text-2xl lg:text-3xl font-bold text-gray-800 mb-6">
-                  Contact <span className="bg-linear-to-r from-blue-400 to-blue-300 bg-clip-text text-transparent">Information</span>
+                  Contact <span className="bg-gradient-to-r from-blue-400 to-blue-300 bg-clip-text text-transparent">Information</span>
                 </h3>
                 
                 <p className="text-gray-600 text-lg leading-relaxed mb-8">
@@ -525,7 +494,7 @@ const Contact = () => {
                       rel={item.link.startsWith('http') ? "noopener noreferrer" : ""}
                       className="group flex items-center gap-4 p-5 rounded-2xl border border-gray-200/60 hover:border-blue-200/80 bg-white/60 hover:bg-white/80 backdrop-blur-sm transition-all duration-500 hover:shadow-md"
                     >
-                      <div className={`p-3 rounded-xl bg-linear-to-r ${item.color} text-white shadow-sm animate-gentle-float`}>
+                      <div className={`p-3 rounded-xl bg-gradient-to-r ${item.color} text-white shadow-sm animate-gentle-float`}>
                         {item.icon}
                       </div>
                       <div className="flex-1">
@@ -551,73 +520,64 @@ const Contact = () => {
                         <span className="font-semibold">
                           Backend Status:{" "}
                           <span className={
-                            backendStatus === "connected" 
+                            backendStatus.status === "connected" 
                               ? "text-green-600" 
-                              : backendStatus === "checking" 
+                              : backendStatus.status === "checking" 
                               ? "text-blue-600" 
                               : "text-red-600"
                           }>
-                            {backendStatus.charAt(0).toUpperCase() + backendStatus.slice(1)}
+                            {backendStatus.status.charAt(0).toUpperCase() + backendStatus.status.slice(1)}
                           </span>
                         </span>
                       </div>
-                      {backendStatus === "connected" && totalSubmissions > 0 && (
+                      {backendStatus.status === "connected" && backendStatus.totalSubmissions !== undefined && backendStatus.totalSubmissions > 0 && (
                         <span className="text-xs font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                          {totalSubmissions} submissions
+                          {backendStatus.totalSubmissions} submissions
                         </span>
                       )}
+                      <button
+                        onClick={checkBackendConnection}
+                        disabled={isCheckingBackend}
+                        className="text-sm text-blue-600 hover:text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Check connection"
+                      >
+                        {isCheckingBackend ? (
+                          <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <SyncIcon sx={{ fontSize: "1rem" }} />
+                        )}
+                      </button>
                     </div>
                     
                     <div className="text-sm mb-3">
-                      {backendDetails}
-                      {connectionAttempts > 0 && (
+                      {backendStatus.details}
+                      {backendStatus.lastChecked && (
                         <span className="text-xs text-gray-500 ml-2">
-                          (Attempt {connectionAttempts})
+                          (Last checked: {backendStatus.lastChecked.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
                         </span>
                       )}
                     </div>
                     
-                    {backendStatus === "disconnected" && (
-                      <div className="space-y-2">
-                        <p className="text-xs text-red-600">
-                          ⚠️ Render free tier spins down after inactivity.
-                          First request may take 30-60 seconds.
-                        </p>
-                        <button
-                          onClick={retryBackendConnection}
-                          disabled={isRetrying}
-                          className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 disabled:opacity-50"
-                        >
-                          {isRetrying ? (
-                            <>
-                              <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                              Retrying...
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                              </svg>
-                              Retry Connection
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    )}
-                    
                     <div className="mt-3 pt-3 border-t border-gray-200/50">
                       <div className="text-xs text-gray-500 flex items-center gap-1">
-                        <StorageIcon sx={{ fontSize: "0.8rem" }} />
-                        Database: MongoDB Atlas
+                        <CloudIcon sx={{ fontSize: "0.8rem" }} />
+                        Backend URL: {API_URL}
                       </div>
                       <div className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm6 14h-12v-4h12v4z"/>
-                        </svg>
-                        Backend: Render (protfolio-backend-8p47.onrender.com)
+                        <div className="w-3 h-3 bg-gradient-to-r from-green-400 to-blue-500 rounded-full"></div>
+                        Database: MongoDB Atlas (Cloud)
                       </div>
-                      <div className="text-xs text-gray-500 truncate mt-1">
-                        Frontend: taupe-scone-358de8.netlify.app
+                      <div className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                        <div className="w-3 h-3 bg-gradient-to-r from-purple-400 to-pink-500 rounded-full"></div>
+                        Hosting: Render (Free Tier)
+                      </div>
+                      <div className="text-xs text-gray-400 mt-2">
+                        {backendStatus.status === "connected" 
+                          ? "✅ Form submissions will be saved to database"
+                          : backendStatus.status === "checking"
+                          ? "🔄 Checking backend availability..."
+                          : "⚠️ Using email fallback method"
+                        }
                       </div>
                     </div>
                   </div>
@@ -628,11 +588,16 @@ const Contact = () => {
             <div className={`transition-all duration-700 delay-400 ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10'}`}>
               <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 lg:p-10 shadow-lg border border-gray-100">
                 <h3 className="text-2xl lg:text-3xl font-bold text-gray-800 mb-2">
-                  Send Me a <span className="bg-linear-to-r from-blue-400 to-blue-300 bg-clip-text text-transparent">Message</span>
+                  Send Me a <span className="bg-gradient-to-r from-blue-400 to-blue-300 bg-clip-text text-transparent">Message</span>
                 </h3>
-                <p className="text-gray-600 mb-8">I'll get back to you as soon as possible</p>
+                <p className="text-gray-600 mb-8">
+                  {backendStatus.status === "connected" 
+                    ? "Your message will be saved to MongoDB database"
+                    : "Your message will be sent via email (backend fallback)"
+                  }
+                </p>
 
-                <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-6">
                   {['fullname', 'email', 'address', 'message'].map((field) => (
                     <div key={field} className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700 capitalize">
@@ -694,7 +659,7 @@ const Contact = () => {
 
                   <button
                     type="submit"
-                    disabled={isSubmitting || backendStatus !== "connected"}
+                    disabled={isSubmitting}
                     className={`
                       group
                       w-full
@@ -705,26 +670,21 @@ const Contact = () => {
                       shadow-md
                       transition-all duration-500
                       disabled:opacity-50 disabled:cursor-not-allowed
-                      ${isSubmitting || backendStatus !== "connected"
-                        ? "bg-gray-400 text-white cursor-not-allowed" 
-                        : "bg-linear-to-r from-blue-400 to-blue-500 text-white hover:shadow-lg hover:scale-102 active:scale-98"
+                      ${backendStatus.status === "connected"
+                        ? "bg-gradient-to-r from-green-400 to-blue-500 text-white hover:shadow-lg hover:scale-102 active:scale-98"
+                        : "bg-gradient-to-r from-blue-400 to-purple-500 text-white hover:shadow-lg hover:scale-102 active:scale-98"
                       }
                     `}
                   >
                     {isSubmitting ? (
                       <>
                         <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>Sending...</span>
-                      </>
-                    ) : backendStatus !== "connected" ? (
-                      <>
-                        <ErrorIcon sx={{ fontSize: "1.2rem" }} />
-                        <span>Backend Disconnected</span>
+                        <span>{getSubmitButtonText()}</span>
                       </>
                     ) : (
                       <>
                         <SendIcon className="group-hover:animate-gentle-float" />
-                        <span>Send Message</span>
+                        <span>{getSubmitButtonText()}</span>
                         <div className="group-hover:translate-x-1 transition-transform duration-300">→</div>
                       </>
                     )}
@@ -732,26 +692,47 @@ const Contact = () => {
                 </form>
 
                 <div className="mt-6 space-y-3">
-                  <div className="text-xs text-gray-500 text-center">
-                    {backendStatus === "connected" 
-                      ? "✅ Form data will be permanently saved to MongoDB Atlas database"
-                      : "❌ Backend server required to save data permanently"
-                    }
-                  </div>
-                  
-                  {backendStatus === "connected" && (
-                    <div className="text-center">
-                      <div className="inline-flex items-center gap-2 text-xs text-green-600 bg-green-50 px-3 py-1 rounded-full">
-                        <StorageIcon sx={{ fontSize: "0.8rem" }} />
-                        Connected to MongoDB Atlas
-                      </div>
+                  <div className="text-center">
+                    <div className={`inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full ${
+                      backendStatus.status === "connected" 
+                        ? "text-green-600 bg-green-50" 
+                        : backendStatus.status === "checking"
+                        ? "text-blue-600 bg-blue-50"
+                        : "text-yellow-600 bg-yellow-50"
+                    }`}>
+                      {backendStatus.status === "connected" ? (
+                        <>
+                          <CloudIcon sx={{ fontSize: "0.8rem" }} />
+                          Connected to backend database
+                        </>
+                      ) : backendStatus.status === "checking" ? (
+                        <>
+                          <SyncIcon sx={{ fontSize: "0.8rem" }} className="animate-spin" />
+                          Checking backend connection
+                        </>
+                      ) : (
+                        <>
+                          <EmailIcon sx={{ fontSize: "0.8rem" }} />
+                          Using email fallback method
+                        </>
+                      )}
                     </div>
-                  )}
+                  </div>
                   
                   <div className="text-center text-xs text-gray-400">
                     <p>Powered by: React + Node.js + MongoDB</p>
-                    <p className="mt-1">Frontend: Netlify</p>
-                    <p className="mt-1">Backend: Render</p>
+                    <p className="mt-1">
+                      {backendStatus.status === "connected" 
+                        ? "Backend: https://protfolio-backend-8p47.onrender.com"
+                        : "Frontend: Static React App"
+                      }
+                    </p>
+                    <p className="mt-1">
+                      {backendStatus.status === "connected"
+                        ? "Data storage: MongoDB Atlas Cloud Database"
+                        : "Communication: Direct email via mailto links"
+                      }
+                    </p>
                   </div>
                 </div>
               </div>
