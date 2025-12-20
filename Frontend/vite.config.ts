@@ -13,7 +13,8 @@ export default defineConfig(({ mode }) => {
     ],
     build: {
       outDir: 'dist',
-      sourcemap: mode === 'development',
+      sourcemap: false,
+      minify: 'terser',
       rollupOptions: {
         output: {
           manualChunks: {
@@ -27,17 +28,9 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       host: true,
-      proxy: {
-        // Proxy API requests to avoid CORS in development
-        '/api': {
-          target: env.VITE_API_URL || 'http://localhost:4000',
-          changeOrigin: true,
-          secure: false,
-        }
-      }
     },
     define: {
-      'process.env': {}
+      'process.env.VITE_API_URL': JSON.stringify(env.VITE_API_URL || 'https://protfolio-backend-8p47.onrender.com')
     }
   }
 });

@@ -1,18 +1,44 @@
 {
   "name": "aditya-auchar-portfolio",
-  "description": "Modern portfolio website showcasing Aditya Auchar's frontend development skills",
-  "version": "1.0.0",
+  "description": "Modern portfolio website showcasing Aditya Auchar's frontend development skills - Deployed on Netlify",
+  "version": "2.0.0",
   "type": "module",
   "author": "Aditya Auchar",
+  "license": "MIT",
   "private": true,
+  "homepage": "https://taupe-scone-358de8.netlify.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/YOUR_REPO.git"
+  },
+  "keywords": [
+    "portfolio",
+    "react",
+    "typescript",
+    "vite",
+    "tailwindcss",
+    "frontend",
+    "netlify",
+    "render",
+    "mongodb"
+  ],
   "scripts": {
     "dev": "vite",
     "start": "vite",
-    "build": "vite build",
+    "build": "vite build --mode production",
     "preview": "vite preview",
     "lint": "eslint .",
-    "build:prod": "vite build --mode production",
-    "build:dev": "vite build --mode development"
+    "lint:fix": "eslint . --fix",
+    "build:prod": "VITE_API_URL=https://protfolio-backend-8p47.onrender.com vite build --mode production",
+    "build:dev": "vite build --mode development",
+    "build:netlify": "VITE_API_URL=https://protfolio-backend-8p47.onrender.com NODE_ENV=production vite build --mode production",
+    "build:local": "VITE_API_URL=http://localhost:4000 vite build --mode development",
+    "preview:prod": "npm run build:prod && vite preview --port 4173",
+    "preview:dev": "npm run build:dev && vite preview --port 4174",
+    "clean": "rm -rf dist node_modules/.vite",
+    "test": "echo \"No tests specified\" && exit 0",
+    "type-check": "tsc --noEmit",
+    "analyze": "ANALYZE=true npm run build"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -39,10 +65,29 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "@typescript-eslint/eslint-plugin": "^8.25.0",
+    "@typescript-eslint/parser": "^8.25.0"
   },
   "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=8.0.0"
-  }
+    "node": ">=18.17.0",
+    "npm": ">=9.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "volta": {
+    "node": "18.17.0"
+  },
+  "packageManager": "npm@9.6.7"
 }

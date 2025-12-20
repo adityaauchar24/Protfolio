@@ -10,8 +10,8 @@ import WifiOffIcon from "@mui/icons-material/WifiOff";
 import CloudOffIcon from "@mui/icons-material/CloudOff";
 import StorageIcon from "@mui/icons-material/Storage";
 
-// Use your actual Render backend URL
-const API_URL = import.meta.env.VITE_API_URL || "https://protfolio-backend-8p47.onrender.com";
+// CORRECT BACKEND URL - Your actual Render backend
+const API_URL = "https://protfolio-backend-8p47.onrender.com";
 
 // TypeScript interfaces
 interface ContactInfo {
@@ -158,7 +158,7 @@ const Contact = () => {
       console.log(`🔄 Connection attempt: ${connectionAttempts + 1}`);
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
       
       const response = await fetch(`${backendUrl}/api/test`, {
         method: 'GET',
@@ -190,15 +190,13 @@ const Contact = () => {
       
       console.log(`🔗 Testing backend connection to: ${backendUrl}/api/health`);
       console.log(`🌐 Current API URL: ${backendUrl}`);
-      console.log(`📊 Environment: ${import.meta.env.MODE}`);
-      console.log(`🎯 VITE_API_URL from env: ${import.meta.env.VITE_API_URL}`);
       
       if (connectionAttempts === 0) {
         setBackendDetails("First connection attempt (Render free tier may take 30-60s to start)...");
       }
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
       
       const response = await fetch(`${backendUrl}/api/health`, {
         method: 'GET',
@@ -220,10 +218,6 @@ const Contact = () => {
         setBackendDetails(`Database: ${data.database} | Total Submissions: ${data.totalUsers || 0}`);
         setTotalSubmissions(data.totalUsers || 0);
         
-        if (data.server?.renderUrl) {
-          setBackendUrl(data.server.renderUrl);
-        }
-        
         return true;
       } else {
         console.error("❌ Backend health check failed:", response.status);
@@ -237,9 +231,9 @@ const Contact = () => {
       
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
-          setBackendDetails("Connection timeout (30s). The backend server is starting up. Render free tier has cold starts.");
+          setBackendDetails("Connection timeout (20s). Backend might be starting up. Render free tier has cold starts.");
         } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-          setBackendDetails("Network error. Please check your internet connection and try again.");
+          setBackendDetails("Network error. Please check your internet connection.");
         } else {
           setBackendDetails(`Cannot connect to backend: ${error.message || 'Unknown error'}`);
         }
@@ -249,13 +243,10 @@ const Contact = () => {
         setBackendDetails("Cannot connect to backend: Unknown error occurred");
       }
       
-      if (connectionAttempts < 3) {
-        setBackendDetails(prev => prev + " Retrying in 5 seconds...");
+      if (connectionAttempts < 2) {
         setTimeout(() => {
-          if (backendStatus === "disconnected") {
-            retryBackendConnection();
-          }
-        }, 5000);
+          retryBackendConnection();
+        }, 3000);
       }
       
       return false;
@@ -325,8 +316,6 @@ const Contact = () => {
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
-    console.log("📝 Form submitted");
-    console.log("🌐 Using API URL:", backendUrl);
     
     if (!validateForm()) {
       setMessage({ type: "error", mess: "Please fix the validation errors above" });
@@ -338,18 +327,15 @@ const Contact = () => {
       if (!isConnected) {
         setMessage({ 
           type: "error", 
-          mess: "Backend server is not reachable. Please wait a moment and try again. Render free tier servers spin down after inactivity." 
+          mess: "Backend server is not reachable. Please wait a moment and try again." 
         });
         return;
       }
     }
 
     setIsSubmitting(true);
-    console.log("🔄 Submitting form...");
 
     try {
-      console.log("🌐 API URL:", backendUrl);
-      
       const requestData = {
         fullname: contactForm.fullname.trim(),
         email: contactForm.email.trim().toLowerCase(),
@@ -357,27 +343,19 @@ const Contact = () => {
         message: contactForm.message.trim()
       };
 
-      console.log("📤 Sending data to backend:", requestData);
-
+      // Try multiple endpoints
       const endpoints = [
         "/api/contact",
         "/users",
-        "/contact",
-        "/api/send-message",
-        "/send-message",
-        "/api/messages",
-        "/api/submit"
+        "/contact"
       ];
 
-      let lastError = "Failed to send message. Please try again later.";
       let success = false;
       
       for (const endpoint of endpoints) {
         try {
-          console.log(`🔄 Trying endpoint: ${backendUrl}${endpoint}`);
-          
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 30000);
+          const timeoutId = setTimeout(() => controller.abort(), 15000);
           
           const response = await fetch(`${backendUrl}${endpoint}`, {
             method: "POST",
@@ -390,16 +368,12 @@ const Contact = () => {
 
           clearTimeout(timeoutId);
           
-          console.log(`📨 Response from ${endpoint}:`, response.status);
-          
           const data: BackendResponse = await response.json();
-          console.log(`📊 Response data from ${endpoint}:`, data);
 
-          if (response.ok && (data.success || data._message === "Successfully submitted" || data.message?.includes("success"))) {
-            console.log("✅ Data successfully saved to MongoDB Atlas with ID:", data.id);
+          if (response.ok && (data.success || data._message === "Successfully submitted")) {
             setMessage({ 
               type: "success", 
-              mess: data._message || data.message || "Message sent successfully! Your data has been permanently saved to MongoDB Atlas database." 
+              mess: data._message || data.message || "Message sent successfully!" 
             });
             setContactForm(initialForm);
             setFormErrors({});
@@ -408,62 +382,31 @@ const Contact = () => {
               formRef.current.reset();
             }
             
-            setTimeout(() => checkBackendConnection(), 1500);
+            // Update backend status
+            setTimeout(() => checkBackendConnection(), 1000);
             success = true;
             break;
-          } else {
-            lastError = data._message || data.error || data.message || `Request failed with status ${response.status}`;
-            console.error(`❌ Endpoint ${endpoint} failed:`, lastError);
-            
-            if (response.status === 409) {
-              setMessage({
-                type: "error",
-                mess: "You have already submitted a similar message recently. Please wait before submitting again."
-              });
-              break;
-            }
           }
-        } catch (endpointError: unknown) {
-          console.error(`❌ Endpoint ${endpoint} failed:`, endpointError);
-          
-          if (endpointError instanceof Error) {
-            if (endpointError.name === 'AbortError') {
-              lastError = "Request timeout (30s). The backend is starting up. Please try again in a moment.";
-            } else {
-              lastError = `Network error: ${endpointError.message || 'Cannot connect to server'}`;
-            }
-          } else if (typeof endpointError === 'string') {
-            lastError = `Error: ${endpointError}`;
-          } else {
-            lastError = "Network error: Cannot connect to server";
-          }
+        } catch (error) {
+          console.error(`Endpoint ${endpoint} failed:`, error);
         }
       }
 
       if (!success) {
         setMessage({ 
           type: "error", 
-          mess: lastError
+          mess: "Failed to send message. Please try again later." 
         });
       }
 
     } catch (error: unknown) {
-      console.error("❌ API call failed:", error);
-      
-      let errorMessage = "Please check your connection and try again.";
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === 'string') {
-        errorMessage = error;
-      }
-      
+      console.error("API call failed:", error);
       setMessage({ 
         type: "error", 
-        mess: `Error: ${errorMessage}` 
+        mess: "Error submitting form. Please try again." 
       });
     } finally {
       setIsSubmitting(false);
-      console.log("✅ Submission completed");
     }
   };
 
@@ -535,30 +478,15 @@ const Contact = () => {
             0%, 100% { transform: translateY(0px) scale(1); }
             50% { transform: translateY(-3px) scale(1.02); }
           }
-          @keyframes soft-pulse {
-            0%, 100% { opacity: 0.4; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(1.05); }
-          }
-          @keyframes icon-glow {
-            0%, 100% { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-            50% { box-shadow: 0 6px 20px rgba(0,0,0,0.15); }
-          }
           .animate-gentle-float {
             animation: gentle-float 4s ease-in-out infinite;
-          }
-          .animate-soft-pulse {
-            animation: soft-pulse 6s ease-in-out infinite;
-          }
-          .animate-icon-glow {
-            animation: icon-glow 3s ease-in-out infinite;
           }
         `}
       </style>
 
       <section id="contact" ref={sectionRef} className="relative overflow-hidden py-16 lg:py-24">
-        <div className="absolute top-0 left-0 w-72 h-72 bg-blue-50 rounded-full mix-blend-multiply opacity-30 animate-soft-pulse"></div>
-        <div className="absolute bottom-0 right-0 w-72 h-72 bg-cyan-50 rounded-full mix-blend-multiply opacity-30 animate-soft-pulse delay-2000"></div>
-        <div className="absolute top-1/2 left-1/3 w-60 h-60 bg-sky-50 rounded-full mix-blend-multiply opacity-25 animate-soft-pulse delay-4000"></div>
+        <div className="absolute top-0 left-0 w-72 h-72 bg-blue-50 rounded-full mix-blend-multiply opacity-30"></div>
+        <div className="absolute bottom-0 right-0 w-72 h-72 bg-cyan-50 rounded-full mix-blend-multiply opacity-30"></div>
         
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className={`text-center mb-16 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
@@ -652,33 +580,28 @@ const Contact = () => {
                     {backendStatus === "disconnected" && (
                       <div className="space-y-2">
                         <p className="text-xs text-red-600">
-                          ⚠️ Important: Render free tier spins down after 15 minutes of inactivity.
-                          First request may take 30-60 seconds to wake up the server.
+                          ⚠️ Render free tier spins down after inactivity.
+                          First request may take 30-60 seconds.
                         </p>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={retryBackendConnection}
-                            disabled={isRetrying}
-                            className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 disabled:opacity-50"
-                          >
-                            {isRetrying ? (
-                              <>
-                                <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                                Retrying...
-                              </>
-                            ) : (
-                              <>
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                                Retry Connection
-                              </>
-                            )}
-                          </button>
-                          <span className="text-xs text-gray-500">
-                            Will auto-retry...
-                          </span>
-                        </div>
+                        <button
+                          onClick={retryBackendConnection}
+                          disabled={isRetrying}
+                          className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 disabled:opacity-50"
+                        >
+                          {isRetrying ? (
+                            <>
+                              <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                              Retrying...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                              Retry Connection
+                            </>
+                          )}
+                        </button>
                       </div>
                     )}
                     
@@ -691,12 +614,9 @@ const Contact = () => {
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
                           <path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm6 14h-12v-4h12v4z"/>
                         </svg>
-                        Backend: Render (Node.js) - Free Tier
+                        Backend: Render (protfolio-backend-8p47.onrender.com)
                       </div>
-                      <div className="text-xs text-gray-500 truncate mt-1" title={backendUrl}>
-                        URL: {backendUrl}
-                      </div>
-                      <div className="text-xs text-gray-400 mt-1">
+                      <div className="text-xs text-gray-500 truncate mt-1">
                         Frontend: taupe-scone-358de8.netlify.app
                       </div>
                     </div>
@@ -814,7 +734,7 @@ const Contact = () => {
                 <div className="mt-6 space-y-3">
                   <div className="text-xs text-gray-500 text-center">
                     {backendStatus === "connected" 
-                      ? "✅ Form data will be permanently saved to MongoDB Atlas database (aditya-protfolio)"
+                      ? "✅ Form data will be permanently saved to MongoDB Atlas database"
                       : "❌ Backend server required to save data permanently"
                     }
                   </div>
@@ -830,8 +750,8 @@ const Contact = () => {
                   
                   <div className="text-center text-xs text-gray-400">
                     <p>Powered by: React + Node.js + MongoDB</p>
-                    <p className="mt-1">Frontend: Netlify (taupe-scone-358de8.netlify.app)</p>
-                    <p className="mt-1">Backend: Render (protfolio-backend-8p47.onrender.com)</p>
+                    <p className="mt-1">Frontend: Netlify</p>
+                    <p className="mt-1">Backend: Render</p>
                   </div>
                 </div>
               </div>
