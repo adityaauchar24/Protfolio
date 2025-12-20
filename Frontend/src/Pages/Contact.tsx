@@ -10,24 +10,8 @@ import WifiOffIcon from "@mui/icons-material/WifiOff";
 import CloudOffIcon from "@mui/icons-material/CloudOff";
 import StorageIcon from "@mui/icons-material/Storage";
 
-// Environment Configuration
-const getApiUrl = (): string => {
-  // Check if we're in development mode
-  const isDevelopment = import.meta.env.DEV;
-  
-  // Get the API URL from environment variable or use default
-  const envApiUrl = import.meta.env.VITE_API_URL;
-  
-  // If environment variable is set, use it
-  if (envApiUrl && envApiUrl !== "http://localhost:4000") {
-    return envApiUrl;
-  }
-  
-  // Default to Render backend for production
-  return "https://aditya-auchar-portfolio-backend.onrender.com";
-};
-
-const API_URL = getApiUrl();
+// Use your actual Render backend URL
+const API_URL = import.meta.env.VITE_API_URL || "https://protfolio-backend-8p47.onrender.com";
 
 // TypeScript interfaces
 interface ContactInfo {
@@ -174,7 +158,7 @@ const Contact = () => {
       console.log(`🔄 Connection attempt: ${connectionAttempts + 1}`);
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased timeout for Render cold starts
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
       
       const response = await fetch(`${backendUrl}/api/test`, {
         method: 'GET',
@@ -209,14 +193,12 @@ const Contact = () => {
       console.log(`📊 Environment: ${import.meta.env.MODE}`);
       console.log(`🎯 VITE_API_URL from env: ${import.meta.env.VITE_API_URL}`);
       
-      // For Render free tier, we need to handle cold starts
       if (connectionAttempts === 0) {
         setBackendDetails("First connection attempt (Render free tier may take 30-60s to start)...");
       }
       
-      // Test health endpoint with longer timeout for Render cold starts
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds for first connection
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
       
       const response = await fetch(`${backendUrl}/api/health`, {
         method: 'GET',
@@ -238,7 +220,6 @@ const Contact = () => {
         setBackendDetails(`Database: ${data.database} | Total Submissions: ${data.totalUsers || 0}`);
         setTotalSubmissions(data.totalUsers || 0);
         
-        // Show Render URL if available
         if (data.server?.renderUrl) {
           setBackendUrl(data.server.renderUrl);
         }
@@ -254,7 +235,6 @@ const Contact = () => {
       console.error("❌ Backend connection error:", error);
       setBackendStatus("disconnected");
       
-      // Type-safe error handling
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
           setBackendDetails("Connection timeout (30s). The backend server is starting up. Render free tier has cold starts.");
@@ -269,7 +249,6 @@ const Contact = () => {
         setBackendDetails("Cannot connect to backend: Unknown error occurred");
       }
       
-      // Special handling for Render cold starts
       if (connectionAttempts < 3) {
         setBackendDetails(prev => prev + " Retrying in 5 seconds...");
         setTimeout(() => {
@@ -331,7 +310,6 @@ const Contact = () => {
 
   const handleFormChange = (field: keyof ContactForm, value: string): void => {
     setContactForm(prev => ({ ...prev, [field]: value }));
-    // Clear error when user starts typing
     if (formErrors[field]) {
       setFormErrors(prev => ({ ...prev, [field]: "" }));
     }
@@ -355,7 +333,6 @@ const Contact = () => {
       return;
     }
 
-    // If backend is disconnected, try to connect first
     if (backendStatus !== "connected") {
       const isConnected = await checkBackendConnection();
       if (!isConnected) {
@@ -373,7 +350,6 @@ const Contact = () => {
     try {
       console.log("🌐 API URL:", backendUrl);
       
-      // Prepare data according to backend schema
       const requestData = {
         fullname: contactForm.fullname.trim(),
         email: contactForm.email.trim().toLowerCase(),
@@ -383,7 +359,6 @@ const Contact = () => {
 
       console.log("📤 Sending data to backend:", requestData);
 
-      // Try multiple endpoints for better compatibility
       const endpoints = [
         "/api/contact",
         "/users",
@@ -402,7 +377,7 @@ const Contact = () => {
           console.log(`🔄 Trying endpoint: ${backendUrl}${endpoint}`);
           
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds for Render
+          const timeoutId = setTimeout(() => controller.abort(), 30000);
           
           const response = await fetch(`${backendUrl}${endpoint}`, {
             method: "POST",
@@ -429,12 +404,10 @@ const Contact = () => {
             setContactForm(initialForm);
             setFormErrors({});
             
-            // Reset form
             if (formRef.current) {
               formRef.current.reset();
             }
             
-            // Update backend status to show new user count
             setTimeout(() => checkBackendConnection(), 1500);
             success = true;
             break;
@@ -442,7 +415,6 @@ const Contact = () => {
             lastError = data._message || data.error || data.message || `Request failed with status ${response.status}`;
             console.error(`❌ Endpoint ${endpoint} failed:`, lastError);
             
-            // If we get a 409 conflict (duplicate submission), break early
             if (response.status === 409) {
               setMessage({
                 type: "error",
@@ -454,7 +426,6 @@ const Contact = () => {
         } catch (endpointError: unknown) {
           console.error(`❌ Endpoint ${endpoint} failed:`, endpointError);
           
-          // Type-safe error handling
           if (endpointError instanceof Error) {
             if (endpointError.name === 'AbortError') {
               lastError = "Request timeout (30s). The backend is starting up. Please try again in a moment.";
@@ -469,7 +440,6 @@ const Contact = () => {
         }
       }
 
-      // If all endpoints failed
       if (!success) {
         setMessage({ 
           type: "error", 
@@ -586,13 +556,11 @@ const Contact = () => {
       </style>
 
       <section id="contact" ref={sectionRef} className="relative overflow-hidden py-16 lg:py-24">
-        {/* Light Background Elements */}
         <div className="absolute top-0 left-0 w-72 h-72 bg-blue-50 rounded-full mix-blend-multiply opacity-30 animate-soft-pulse"></div>
         <div className="absolute bottom-0 right-0 w-72 h-72 bg-cyan-50 rounded-full mix-blend-multiply opacity-30 animate-soft-pulse delay-2000"></div>
         <div className="absolute top-1/2 left-1/3 w-60 h-60 bg-sky-50 rounded-full mix-blend-multiply opacity-25 animate-soft-pulse delay-4000"></div>
         
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Section Header */}
           <div className={`text-center mb-16 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
             <div className="inline-flex items-center gap-3 mb-4">
               <div className="w-6 h-0.5 bg-linear-to-r from-blue-300 to-blue-200"></div>
@@ -610,7 +578,6 @@ const Contact = () => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16">
-            {/* Contact Information */}
             <div className={`transition-all duration-700 delay-200 ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-10'}`}>
               <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 lg:p-10 shadow-lg border border-gray-100">
                 <h3 className="text-2xl lg:text-3xl font-bold text-gray-800 mb-6">
@@ -648,7 +615,6 @@ const Contact = () => {
                   ))}
                 </div>
 
-                {/* Backend Status Indicator */}
                 <div className="mt-8">
                   <div className={`p-4 rounded-2xl border transition-all duration-300 ${getBackendStatusColor()}`}>
                     <div className="flex items-center justify-between mb-2">
@@ -731,7 +697,7 @@ const Contact = () => {
                         URL: {backendUrl}
                       </div>
                       <div className="text-xs text-gray-400 mt-1">
-                        {import.meta.env.MODE === 'development' ? 'Development Mode' : 'Production Mode'}
+                        Frontend: taupe-scone-358de8.netlify.app
                       </div>
                     </div>
                   </div>
@@ -739,7 +705,6 @@ const Contact = () => {
               </div>
             </div>
 
-            {/* Contact Form */}
             <div className={`transition-all duration-700 delay-400 ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10'}`}>
               <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 lg:p-10 shadow-lg border border-gray-100">
                 <h3 className="text-2xl lg:text-3xl font-bold text-gray-800 mb-2">
@@ -865,8 +830,8 @@ const Contact = () => {
                   
                   <div className="text-center text-xs text-gray-400">
                     <p>Powered by: React + Node.js + MongoDB</p>
-                    <p className="mt-1">Hosted on: Netlify (Frontend) + Render (Backend)</p>
-                    <p className="mt-1 text-gray-300">Note: Render free tier may have cold start delays</p>
+                    <p className="mt-1">Frontend: Netlify (taupe-scone-358de8.netlify.app)</p>
+                    <p className="mt-1">Backend: Render (protfolio-backend-8p47.onrender.com)</p>
                   </div>
                 </div>
               </div>
@@ -874,7 +839,6 @@ const Contact = () => {
           </div>
         </div>
 
-        {/* Custom Toast Notification */}
         <CustomToast />
       </section>
     </>
