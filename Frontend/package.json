@@ -1,15 +1,16 @@
 {
-  "name": "aditya-auchar-portfolio",
+  "name": "aditya-auchar-portfolio-frontend",
   "description": "Modern portfolio website showcasing Aditya Auchar's frontend development skills",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "type": "module",
   "author": "Aditya Auchar",
   "license": "MIT",
   "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/aditya-auchar/portfolio"
+    "url": "https://github.com/aditya-auchar24/Protfolio"
   },
+  "homepage": "https://protfolio-frontend-ytfj.onrender.com",
   "keywords": [
     "portfolio",
     "react",
@@ -17,19 +18,22 @@
     "vite",
     "tailwindcss",
     "frontend",
-    "static-site"
+    "render",
+    "mongodb"
   ],
   "scripts": {
-    "dev": "vite",
-    "start": "vite",
+    "dev": "vite --host 0.0.0.0",
+    "start": "vite --host 0.0.0.0 --port $PORT",
     "build": "vite build",
-    "preview": "vite preview",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
+    "preview": "vite preview --host 0.0.0.0 --port $PORT",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0 --fix",
     "clean": "rm -rf dist node_modules/.vite",
     "type-check": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,css,md}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,css,md}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,css,md}\"",
+    "render-build": "npm run build",
+    "render-start": "npm run preview"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

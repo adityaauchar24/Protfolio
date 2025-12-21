@@ -1,44 +1,76 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { resolve } from 'path';
 
 export default defineConfig(({ mode }) => {
-  // Load env file based on `mode` in the current directory
-  const env = loadEnv(mode, process.cwd(), '');
+  const env = loadEnv(mode, process.cwd(), 'VITE_');
+  
+  const isProduction = mode === 'production';
   
   return {
     plugins: [
       react(),
-      tailwindcss()
+      tailwindcss(),
     ],
+    
+    // Base URL for Render deployment
+    base: '/',
+    
+    // Build configuration
     build: {
       outDir: 'dist',
-      sourcemap: mode === 'development',
-      minify: mode === 'production' ? 'terser' : false,
+      sourcemap: false,
+      minify: isProduction ? 'terser' : false,
+      emptyOutDir: true,
       rollupOptions: {
+        input: {
+          main: resolve(__dirname, 'index.html'),
+        },
         output: {
           manualChunks: {
-            'vendor': ['react', 'react-dom', 'react-router-dom'],
-            'mui': ['@mui/material', '@mui/icons-material', '@emotion/react', '@emotion/styled'],
-            'animations': ['framer-motion', 'react-type-animation']
-          }
-        }
-      }
+            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+            'mui-vendor': ['@mui/material', '@mui/icons-material', '@emotion/react', '@emotion/styled'],
+            'animation-vendor': ['framer-motion', 'react-type-animation'],
+          },
+          chunkFileNames: 'assets/[name]-[hash].js',
+          entryFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash].[ext]',
+        },
+      },
+      terserOptions: {
+        compress: {
+          drop_console: isProduction,
+          drop_debugger: isProduction,
+        },
+      },
     },
+    
+    // Server configuration
     server: {
       port: 3000,
       host: true,
-      proxy: mode === 'development' ? {
-        '/api': {
-          target: env.VITE_API_URL || 'https://protfolio-backend-8p47.onrender.com',
-          changeOrigin: true,
-          secure: false,
-          rewrite: (path) => path.replace(/^\/api/, '')
-        }
-      } : undefined
     },
+    
+    // Preview server for Render
+    preview: {
+      port: 3000,
+      host: true,
+    },
+    
+    // Resolve configuration
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, './src'),
+        '@components': resolve(__dirname, './src/components'),
+      },
+    },
+    
+    // Define global constants
     define: {
-      'import.meta.env.VITE_API_URL': JSON.stringify(env.VITE_API_URL || 'https://protfolio-backend-8p47.onrender.com')
-    }
+      'import.meta.env.VITE_API_URL': JSON.stringify(env.VITE_API_URL || 'https://protfolio-backend-8p47.onrender.com'),
+      'import.meta.env.VITE_FRONTEND_URL': JSON.stringify(env.VITE_FRONTEND_URL || 'https://protfolio-frontend-ytfj.onrender.com'),
+      'import.meta.env.VITE_NODE_ENV': JSON.stringify(mode),
+    },
   };
 });

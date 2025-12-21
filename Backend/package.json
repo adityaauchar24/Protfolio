@@ -1,7 +1,7 @@
 {
   "name": "aditya-auchar-portfolio-backend",
-  "version": "2.0.0",
-  "description": "Backend API for Aditya Auchar Portfolio with MongoDB Atlas",
+  "version": "2.1.0",
+  "description": "Backend API for Aditya Auchar Portfolio with MongoDB Atlas, optimized for Render deployment",
   "main": "index.js",
   "type": "module",
   "scripts": {
@@ -12,9 +12,11 @@
     "build": "echo 'No build step required for Node.js'",
     "render-start": "node index.js",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "docker:build": "docker build -t portfolio-backend .",
+    "docker:run": "docker run -p 10000:10000 portfolio-backend"
   },
-  "keywords": ["portfolio", "backend", "api", "contact-form", "mongodb", "express"],
+  "keywords": ["portfolio", "backend", "api", "contact-form", "mongodb", "express", "render"],
   "author": "Aditya Auchar",
   "license": "ISC",
   "dependencies": {
@@ -23,7 +25,8 @@
     "express": "^4.18.2",
     "mongoose": "^8.19.3",
     "helmet": "^7.1.0",
-    "express-rate-limit": "^7.1.5"
+    "express-rate-limit": "^7.1.5",
+    "compression": "^1.7.4"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
@@ -33,11 +36,12 @@
     "eslint": "^8.56.0"
   },
   "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=8.0.0"
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/aditya-auchar/portfolio-backend"
-  }
+  },
+  "homepage": "https://protfolio-backend-8p47.onrender.com"
 }
