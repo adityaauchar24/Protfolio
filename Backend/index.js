@@ -49,7 +49,21 @@ const findAvailablePort = async (startPort) => {
   throw new Error(`❌ No available ports found between ${startPort} and ${maxPort}`);
 };
 
-// Dynamic CORS configuration for production with your Render frontend URL
+// ==================== SIMPLIFIED CORS CONFIGURATION ====================
+// This is the key fix - simplified CORS for Render deployment
+
+const allowedOrigins = [
+  // Your production frontend
+  "https://protfolio-frontend-ytfj.onrender.com",
+  
+  // Local development origins
+  "http://localhost:3000", 
+  "http://localhost:5173",
+  "http://localhost:4173",
+  "http://localhost:4000"
+];
+
+// Simple CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps, curl requests, or server-to-server)
@@ -58,65 +72,22 @@ const corsOptions = {
       return callback(null, true);
     }
     
-    // List of allowed origins - UPDATED for Render frontend
-    const allowedOrigins = [
-      // Local development
-      "http://localhost:3000", 
-      "http://localhost:5173",
-      "http://localhost:4173",
-      "http://localhost:4000",
-      
-      // Your Render frontend deployment
-      "https://protfolio-frontend-ytfj.onrender.com",
-      
-      // Render patterns
-      "https://*.onrender.com",
-      /\.onrender\.com$/,
-      
-      // From environment variables
-      process.env.CORS_ORIGIN,
-      process.env.FRONTEND_URL
-    ].filter(Boolean);
-    
     console.log(`🌐 Checking CORS for origin: ${origin}`);
     
-    // Check if the origin matches any allowed pattern
-    const isAllowed = allowedOrigins.some(allowedOrigin => {
-      if (typeof allowedOrigin === 'string') {
-        const isMatch = origin === allowedOrigin;
-        if (isMatch) console.log(`✅ Exact match found: ${allowedOrigin}`);
-        return isMatch;
-      } else if (allowedOrigin instanceof RegExp) {
-        const isMatch = allowedOrigin.test(origin);
-        if (isMatch) console.log(`✅ Regex match found for pattern: ${allowedOrigin}`);
-        return isMatch;
-      }
-      return false;
-    });
-    
-    if (isAllowed) {
+    // Check if origin is in the allowed list
+    if (allowedOrigins.indexOf(origin) !== -1) {
       console.log(`✅ CORS allowed for: ${origin}`);
-      callback(null, true);
+      return callback(null, true);
     } else {
       console.log(`❌ CORS blocked for: ${origin}`);
       console.log(`📋 Allowed origins:`, allowedOrigins);
-      
-      // For production, be strict
-      callback(new Error(`CORS policy: Origin ${origin} is not allowed`));
+      return callback(new Error(`CORS policy: Origin ${origin} is not allowed`));
     }
   },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
   credentials: true,
-  allowedHeaders: [
-    "Content-Type", 
-    "Authorization", 
-    "X-Requested-With",
-    "Accept",
-    "Origin"
-  ],
-  preflightContinue: false,
-  optionsSuccessStatus: 204,
-  maxAge: 86400 // 24 hours
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
+  allowedHeaders: ["Content-Type", "Authorization", "Origin", "Accept"],
+  optionsSuccessStatus: 200
 };
 
 // Apply CORS middleware
@@ -124,6 +95,8 @@ app.use(cors(corsOptions));
 
 // Handle preflight requests explicitly
 app.options('*', cors(corsOptions));
+
+// ==================== END CORS CONFIGURATION ====================
 
 // Body parsing middleware
 app.use(express.json({ limit: "10mb" }));
@@ -196,6 +169,8 @@ app.get("/api/health", async (req, res) => {
     const isFrontendRequest = requestOrigin.includes('protfolio-frontend') || 
                               requestOrigin === frontendUrl;
     
+    res.setHeader('Access-Control-Allow-Origin', frontendUrl);
+    
     res.json({ 
       status: "Server is running perfectly! 🚀",
       database: dbStatus,
@@ -207,7 +182,8 @@ app.get("/api/health", async (req, res) => {
         frontend: {
           url: frontendUrl,
           connected: isFrontendRequest,
-          lastRequestOrigin: requestOrigin
+          lastRequestOrigin: requestOrigin,
+          cors: "Configured"
         },
         backend: {
           url: process.env.RENDER_EXTERNAL_URL || "https://protfolio-backend-8p47.onrender.com",
@@ -239,6 +215,9 @@ app.get("/api/health", async (req, res) => {
 
 // Test endpoint for frontend connection testing - UPDATED
 app.get("/api/test", (req, res) => {
+  const frontendUrl = "https://protfolio-frontend-ytfj.onrender.com";
+  res.setHeader('Access-Control-Allow-Origin', frontendUrl);
+  
   res.json({
     success: true,
     message: "Backend API is working correctly! ✅",
@@ -249,10 +228,10 @@ app.get("/api/test", (req, res) => {
       status: "Operational",
       connection: "aditya-protfolio database",
       deployment: "Hosted on Render",
-      frontend: "https://protfolio-frontend-ytfj.onrender.com",
+      frontend: frontendUrl,
       cors: {
         enabled: true,
-        allowedOrigins: ["https://protfolio-frontend-ytfj.onrender.com", "*.onrender.com"]
+        allowedOrigins: allowedOrigins
       }
     },
     instructions: {
@@ -265,6 +244,9 @@ app.get("/api/test", (req, res) => {
 // Database connection test endpoint
 app.get("/api/db-test", async (req, res) => {
   try {
+    const frontendUrl = "https://protfolio-frontend-ytfj.onrender.com";
+    res.setHeader('Access-Control-Allow-Origin', frontendUrl);
+    
     const dbStatus = mongoose.connection.readyState === 1 ? "Connected" : "Disconnected";
     
     if (dbStatus !== "Connected") {
@@ -314,6 +296,9 @@ app.get("/api/db-test", async (req, res) => {
 
 // Basic hello endpoint - UPDATED
 app.get("/api/hello", (req, res) => { 
+  const frontendUrl = "https://protfolio-frontend-ytfj.onrender.com";
+  res.setHeader('Access-Control-Allow-Origin', frontendUrl);
+  
   const dbStatus = mongoose.connection.readyState === 1 ? "Connected" : "Disconnected";
   res.json({ 
     msg: "Backend API is running perfectly with MongoDB! 🚀",
@@ -322,7 +307,7 @@ app.get("/api/hello", (req, res) => {
     timestamp: new Date().toISOString(),
     version: "2.0.0",
     hostedOn: "Render",
-    frontendUrl: "https://protfolio-frontend-ytfj.onrender.com",
+    frontendUrl: frontendUrl,
     backendUrl: process.env.RENDER_EXTERNAL_URL || "https://protfolio-backend-8p47.onrender.com",
     endpoints: {
       contact: "POST /api/contact",
@@ -334,6 +319,9 @@ app.get("/api/hello", (req, res) => {
 
 // Root endpoint - UPDATED
 app.get("/", (req, res) => {
+  const frontendUrl = "https://protfolio-frontend-ytfj.onrender.com";
+  res.setHeader('Access-Control-Allow-Origin', frontendUrl);
+  
   const dbStatus = mongoose.connection.readyState === 1 ? "Connected ✅" : "Disconnected ❌";
   const deploymentInfo = process.env.RENDER_EXTERNAL_URL 
     ? `Render (${process.env.RENDER_EXTERNAL_URL})` 
@@ -347,7 +335,7 @@ app.get("/", (req, res) => {
     timestamp: new Date().toISOString(),
     deployment: deploymentInfo,
     frontend: {
-      url: "https://protfolio-frontend-ytfj.onrender.com",
+      url: frontendUrl,
       name: "Aditya Auchar Portfolio",
       hosting: "Render"
     },
@@ -371,7 +359,9 @@ app.get("/", (req, res) => {
 app.get("/api/connection-test", (req, res) => {
   const origin = req.headers.origin || 'No origin header';
   const frontendUrl = "https://protfolio-frontend-ytfj.onrender.com";
-  const isAllowed = origin.includes('onrender.com') || origin.includes('localhost');
+  res.setHeader('Access-Control-Allow-Origin', frontendUrl);
+  
+  const isAllowed = allowedOrigins.indexOf(origin) !== -1;
   
   res.json({
     success: true,
@@ -395,6 +385,8 @@ app.get("/api/connection-test", (req, res) => {
 // Enhanced 404 handler - UPDATED
 app.use("*", (req, res) => {
   const requestedUrl = req.originalUrl;
+  const frontendUrl = "https://protfolio-frontend-ytfj.onrender.com";
+  res.setHeader('Access-Control-Allow-Origin', frontendUrl);
   
   res.status(404).json({
     success: false,
@@ -412,7 +404,7 @@ app.use("*", (req, res) => {
     timestamp: new Date().toISOString(),
     suggestion: "Check /api/health for all available endpoints",
     deploymentInfo: {
-      frontend: "https://protfolio-frontend-ytfj.onrender.com",
+      frontend: frontendUrl,
       backend: "https://protfolio-backend-8p47.onrender.com"
     }
   });
@@ -435,9 +427,10 @@ app.use((error, req, res, next) => {
       success: false,
       error: 'CORS Error',
       message: error.message,
-      suggestion: "Ensure your frontend URL (https://protfolio-frontend-ytfj.onrender.com) is allowed in CORS configuration",
+      suggestion: `Ensure your frontend URL (https://protfolio-frontend-ytfj.onrender.com) is allowed in CORS configuration`,
       timestamp: new Date().toISOString(),
-      requestOrigin: req.headers.origin
+      requestOrigin: req.headers.origin,
+      allowedOrigins: allowedOrigins
     });
   }
   
@@ -456,7 +449,8 @@ mongoose.connection.on('connected', () => {
   console.log(`🏠 Host: ${mongoose.connection.host}`);
   console.log(`🔗 Connection State: ${mongoose.connection.readyState}`);
   console.log('🎯 Database is ready to accept connections!');
-  console.log(`🔗 Your frontend (${process.env.FRONTEND_URL}) can now connect to this backend`);
+  console.log(`🔗 Your frontend (https://protfolio-frontend-ytfj.onrender.com) can now connect to this backend`);
+  console.log(`🌐 CORS configured for: ${allowedOrigins.join(', ')}`);
 });
 
 mongoose.connection.on('error', (err) => {
@@ -499,13 +493,13 @@ const startServer = async () => {
       
       // Frontend connection info
       console.log(`\n🔗 Frontend Connection Info:`);
-      console.log(`   Frontend URL: ${process.env.FRONTEND_URL}`);
+      console.log(`   Frontend URL: https://protfolio-frontend-ytfj.onrender.com`);
       console.log(`   Backend URL: ${process.env.RENDER_EXTERNAL_URL || 'http://localhost:' + availablePort}`);
-      console.log(`   CORS configured for: ${process.env.CORS_ORIGIN}`);
+      console.log(`   CORS configured for: ${allowedOrigins.join(', ')}`);
       console.log(`   Contact form endpoints are ready`);
       
       console.log(`\n📋 Quick Test:`);
-      console.log(`   1. Visit: ${process.env.FRONTEND_URL}`);
+      console.log(`   1. Visit: https://protfolio-frontend-ytfj.onrender.com`);
       console.log(`   2. Check backend status in Contact section`);
       console.log(`   3. Test form submission`);
       
