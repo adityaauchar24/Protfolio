@@ -49,7 +49,7 @@ const findAvailablePort = async (startPort) => {
   throw new Error(`❌ No available ports found between ${startPort} and ${maxPort}`);
 };
 
-// Dynamic CORS configuration for production with your specific Netlify URL
+// Dynamic CORS configuration for production with your Render frontend URL
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps, curl requests, or server-to-server)
@@ -58,7 +58,7 @@ const corsOptions = {
       return callback(null, true);
     }
     
-    // List of allowed origins
+    // List of allowed origins - UPDATED for Render frontend
     const allowedOrigins = [
       // Local development
       "http://localhost:3000", 
@@ -66,23 +66,19 @@ const corsOptions = {
       "http://localhost:4173",
       "http://localhost:4000",
       
-      // Your specific Netlify deployment
-      "https://taupe-scone-358de8.netlify.app",
+      // Your Render frontend deployment
+      "https://protfolio-frontend-ytfj.onrender.com",
       
-      // Generic Netlify patterns
-      "https://*.netlify.app",
-      /\.netlify\.app$/,
+      // Render patterns
+      "https://*.onrender.com",
+      /\.onrender\.com$/,
       
-      // Development previews
-      "https://*.netlify.app",
-      /^https:\/\/[a-zA-Z0-9-]+\.netlify\.app$/,
-      
-      // From environment variable (fallback)
-      process.env.CORS_ORIGIN
-    ].filter(Boolean); // Remove any undefined/null values
+      // From environment variables
+      process.env.CORS_ORIGIN,
+      process.env.FRONTEND_URL
+    ].filter(Boolean);
     
     console.log(`🌐 Checking CORS for origin: ${origin}`);
-    console.log(`📋 Allowed origins:`, allowedOrigins);
     
     // Check if the origin matches any allowed pattern
     const isAllowed = allowedOrigins.some(allowedOrigin => {
@@ -103,15 +99,10 @@ const corsOptions = {
       callback(null, true);
     } else {
       console.log(`❌ CORS blocked for: ${origin}`);
-      console.log(`💡 Add this URL to allowed origins if needed`);
+      console.log(`📋 Allowed origins:`, allowedOrigins);
       
-      // For development/debugging, you can temporarily allow all origins
-      if (process.env.NODE_ENV === 'development') {
-        console.log('⚠️ Development mode: Allowing origin temporarily');
-        callback(null, true);
-      } else {
-        callback(new Error(`CORS policy: Origin ${origin} is not allowed`));
-      }
+      // For production, be strict
+      callback(new Error(`CORS policy: Origin ${origin} is not allowed`));
     }
   },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
@@ -121,18 +112,7 @@ const corsOptions = {
     "Authorization", 
     "X-Requested-With",
     "Accept",
-    "Origin",
-    "Access-Control-Request-Method",
-    "Access-Control-Request-Headers",
-    "X-API-Key",
-    "Cache-Control",
-    "Pragma"
-  ],
-  exposedHeaders: [
-    "Content-Range",
-    "X-Content-Range",
-    "X-Total-Count",
-    "Content-Disposition"
+    "Origin"
   ],
   preflightContinue: false,
   optionsSuccessStatus: 204,
@@ -188,18 +168,16 @@ app.use("/send-message", userRoutes);
 app.use("/api/messages", userRoutes);
 app.use("/api/submit", userRoutes);
 
-// Enhanced health check endpoint
+// Enhanced health check endpoint - UPDATED for Render frontend
 app.get("/api/health", async (req, res) => {
   try {
     const dbStatus = mongoose.connection.readyState === 1 ? "Connected" : "Disconnected";
     let userCount = 0;
     let databaseName = "Not connected";
-    let databaseStats = {};
     
     if (dbStatus === "Connected") {
       databaseName = mongoose.connection.name || "aditya-protfolio";
       try {
-        // Check if users collection exists and count documents
         const db = mongoose.connection.db;
         const collections = await db.listCollections().toArray();
         const usersCollectionExists = collections.some(c => c.name === 'users');
@@ -207,32 +185,16 @@ app.get("/api/health", async (req, res) => {
         if (usersCollectionExists) {
           userCount = await db.collection('users').countDocuments();
         }
-        
-        // Get database statistics
-        databaseStats = await db.stats();
       } catch (error) {
         console.log("⚠️ Could not count users:", error.message);
       }
     }
     
-    // Get deployment information
-    const deploymentInfo = {
-      platform: process.env.RENDER_EXTERNAL_URL ? "Render" : "Local/Other",
-      url: process.env.RENDER_EXTERNAL_URL || "Not deployed on Render",
-      serviceId: process.env.RENDER_SERVICE_ID || "Not available",
-      instanceId: process.env.RENDER_INSTANCE_ID || "Not available"
-    };
-    
-    // Get CORS configuration info
-    const corsInfo = {
-      frontendUrl: "https://taupe-scone-358de8.netlify.app",
-      allowedOrigins: [
-        "https://taupe-scone-358de8.netlify.app",
-        "*.netlify.app",
-        "localhost:3000",
-        "localhost:5173"
-      ]
-    };
+    // Get request origin
+    const requestOrigin = req.headers.origin || 'No origin header';
+    const frontendUrl = process.env.FRONTEND_URL || "https://protfolio-frontend-ytfj.onrender.com";
+    const isFrontendRequest = requestOrigin.includes('protfolio-frontend') || 
+                              requestOrigin === frontendUrl;
     
     res.json({ 
       status: "Server is running perfectly! 🚀",
@@ -241,40 +203,28 @@ app.get("/api/health", async (req, res) => {
       totalUsers: userCount,
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'production',
-      deployment: deploymentInfo,
-      cors: corsInfo,
+      connections: {
+        frontend: {
+          url: frontendUrl,
+          connected: isFrontendRequest,
+          lastRequestOrigin: requestOrigin
+        },
+        backend: {
+          url: process.env.RENDER_EXTERNAL_URL || "https://protfolio-backend-8p47.onrender.com",
+          status: "Active"
+        }
+      },
       server: {
         port: process.env.SERVER_PORT || DEFAULT_PORT,
         nodeVersion: process.version,
         platform: process.platform,
         uptime: process.uptime()
       },
-      databaseStats: {
-        collections: databaseStats.collections || 0,
-        dataSize: databaseStats.dataSize || 0,
-        storageSize: databaseStats.storageSize || 0,
-        indexSize: databaseStats.indexSize || 0
-      },
       endpoints: {
-        contact: [
-          "POST /users",
-          "POST /api/contact",
-          "POST /contact", 
-          "POST /api/send-message",
-          "POST /send-message",
-          "POST /api/messages",
-          "POST /api/submit"
-        ],
+        contact: "POST /api/contact",
         getUsers: "GET /users",
-        userCount: "GET /users/count",
         health: "GET /api/health",
-        test: "GET /api/test",
-        dbTest: "GET /api/db-test",
-        hello: "GET /api/hello"
-      },
-      frontend: {
-        url: "https://taupe-scone-358de8.netlify.app",
-        status: "Connected via CORS"
+        test: "GET /api/test"
       }
     });
   } catch (error) {
@@ -282,13 +232,12 @@ app.get("/api/health", async (req, res) => {
     res.status(500).json({
       status: "Error",
       error: error.message,
-      timestamp: new Date().toISOString(),
-      suggestion: "Check MongoDB connection and environment variables"
+      timestamp: new Date().toISOString()
     });
   }
 });
 
-// Test endpoint for frontend connection testing
+// Test endpoint for frontend connection testing - UPDATED
 app.get("/api/test", (req, res) => {
   res.json({
     success: true,
@@ -300,15 +249,15 @@ app.get("/api/test", (req, res) => {
       status: "Operational",
       connection: "aditya-protfolio database",
       deployment: "Hosted on Render",
-      frontend: "https://taupe-scone-358de8.netlify.app",
+      frontend: "https://protfolio-frontend-ytfj.onrender.com",
       cors: {
         enabled: true,
-        allowedOrigins: ["https://taupe-scone-358de8.netlify.app", "*.netlify.app"]
+        allowedOrigins: ["https://protfolio-frontend-ytfj.onrender.com", "*.onrender.com"]
       }
     },
     instructions: {
       frontend: "Set VITE_API_URL to https://protfolio-backend-8p47.onrender.com",
-      test: "Use the contact form on the Netlify site to test submission"
+      test: "Use the contact form on your Render site to test submission"
     }
   });
 });
@@ -334,18 +283,6 @@ app.get("/api/db-test", async (req, res) => {
       ? await db.collection('users').countDocuments() 
       : 0;
     
-    // Try to insert and delete a test document
-    const testDocument = {
-      test: true,
-      message: "Database connection test",
-      timestamp: new Date(),
-      source: "Connection test endpoint"
-    };
-    
-    const insertResult = await db.collection('test_connections').insertOne(testDocument);
-    const foundDocument = await db.collection('test_connections').findOne({ _id: insertResult.insertedId });
-    await db.collection('test_connections').deleteOne({ _id: insertResult.insertedId });
-    
     res.json({
       success: true,
       message: "Database connection test successful! ✅",
@@ -355,8 +292,7 @@ app.get("/api/db-test", async (req, res) => {
         port: mongoose.connection.port,
         collections: collections.map(c => c.name),
         totalUsers: usersCount,
-        readyState: mongoose.connection.readyState,
-        writeTest: "Passed - Document inserted and deleted successfully"
+        readyState: mongoose.connection.readyState
       },
       timestamp: new Date().toISOString(),
       connection: {
@@ -371,48 +307,12 @@ app.get("/api/db-test", async (req, res) => {
       success: false,
       message: "Database connection test failed",
       error: error.message,
-      timestamp: new Date().toISOString(),
-      troubleshooting: [
-        "Check MongoDB Atlas connection string",
-        "Verify IP whitelist in MongoDB Atlas",
-        "Check database user permissions",
-        "Ensure network connectivity"
-      ]
+      timestamp: new Date().toISOString()
     });
   }
 });
 
-// Legacy health endpoint for compatibility
-app.get("/health", async (req, res) => {
-  const dbStatus = mongoose.connection.readyState === 1 ? "Connected" : "Disconnected";
-  let userCount = 0;
-  
-  try {
-    if (dbStatus === "Connected") {
-      const db = mongoose.connection.db;
-      const collections = await db.listCollections().toArray();
-      if (collections.some(c => c.name === 'users')) {
-        userCount = await db.collection('users').countDocuments();
-      }
-    }
-  } catch (error) {
-    console.error("Error counting users:", error);
-  }
-  
-  res.json({ 
-    status: "OK", 
-    database: dbStatus,
-    databaseName: mongoose.connection.name || "Not connected",
-    totalUsers: userCount,
-    timestamp: new Date().toISOString(),
-    message: "Backend server is running with MongoDB Atlas! 🎉",
-    deployment: "Hosted on Render",
-    frontend: "https://taupe-scone-358de8.netlify.app",
-    apiVersion: "2.0.0"
-  });
-});
-
-// Basic hello endpoint
+// Basic hello endpoint - UPDATED
 app.get("/api/hello", (req, res) => { 
   const dbStatus = mongoose.connection.readyState === 1 ? "Connected" : "Disconnected";
   res.json({ 
@@ -422,7 +322,7 @@ app.get("/api/hello", (req, res) => {
     timestamp: new Date().toISOString(),
     version: "2.0.0",
     hostedOn: "Render",
-    frontendUrl: "https://taupe-scone-358de8.netlify.app",
+    frontendUrl: "https://protfolio-frontend-ytfj.onrender.com",
     backendUrl: process.env.RENDER_EXTERNAL_URL || "https://protfolio-backend-8p47.onrender.com",
     endpoints: {
       contact: "POST /api/contact",
@@ -432,7 +332,7 @@ app.get("/api/hello", (req, res) => {
   });
 });
 
-// Root endpoint
+// Root endpoint - UPDATED
 app.get("/", (req, res) => {
   const dbStatus = mongoose.connection.readyState === 1 ? "Connected ✅" : "Disconnected ❌";
   const deploymentInfo = process.env.RENDER_EXTERNAL_URL 
@@ -447,9 +347,9 @@ app.get("/", (req, res) => {
     timestamp: new Date().toISOString(),
     deployment: deploymentInfo,
     frontend: {
-      url: "https://taupe-scone-358de8.netlify.app",
+      url: "https://protfolio-frontend-ytfj.onrender.com",
       name: "Aditya Auchar Portfolio",
-      hosting: "Netlify"
+      hosting: "Render"
     },
     backend: {
       url: "https://protfolio-backend-8p47.onrender.com",
@@ -463,20 +363,15 @@ app.get("/", (req, res) => {
       test: "GET /api/test",
       dbTest: "GET /api/db-test",
       documentation: "Check /api/health for all endpoints"
-    },
-    quickStart: {
-      testConnection: "Visit /api/test",
-      checkHealth: "Visit /api/health",
-      submitContact: "POST to /api/contact",
-      testDatabase: "Visit /api/db-test"
     }
   });
 });
 
-// Connection test endpoint specifically for frontend
+// Connection test endpoint specifically for frontend - UPDATED
 app.get("/api/connection-test", (req, res) => {
   const origin = req.headers.origin || 'No origin header';
-  const isAllowed = origin.includes('netlify.app') || origin.includes('localhost');
+  const frontendUrl = "https://protfolio-frontend-ytfj.onrender.com";
+  const isAllowed = origin.includes('onrender.com') || origin.includes('localhost');
   
   res.json({
     success: true,
@@ -490,14 +385,14 @@ app.get("/api/connection-test", (req, res) => {
       allowed: isAllowed
     },
     services: {
-      frontend: "https://taupe-scone-358de8.netlify.app",
+      frontend: frontendUrl,
       backend: "https://protfolio-backend-8p47.onrender.com",
       database: "MongoDB Atlas"
     }
   });
 });
 
-// Enhanced 404 handler
+// Enhanced 404 handler - UPDATED
 app.use("*", (req, res) => {
   const requestedUrl = req.originalUrl;
   
@@ -517,7 +412,7 @@ app.use("*", (req, res) => {
     timestamp: new Date().toISOString(),
     suggestion: "Check /api/health for all available endpoints",
     deploymentInfo: {
-      frontend: "https://taupe-scone-358de8.netlify.app",
+      frontend: "https://protfolio-frontend-ytfj.onrender.com",
       backend: "https://protfolio-backend-8p47.onrender.com"
     }
   });
@@ -540,7 +435,7 @@ app.use((error, req, res, next) => {
       success: false,
       error: 'CORS Error',
       message: error.message,
-      suggestion: "Ensure your frontend URL (https://taupe-scone-358de8.netlify.app) is allowed in CORS configuration",
+      suggestion: "Ensure your frontend URL (https://protfolio-frontend-ytfj.onrender.com) is allowed in CORS configuration",
       timestamp: new Date().toISOString(),
       requestOrigin: req.headers.origin
     });
@@ -550,19 +445,18 @@ app.use((error, req, res, next) => {
     success: false,
     error: 'Internal server error',
     message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong. Please try again later.',
-    timestamp: new Date().toISOString(),
-    requestId: req.id || Date.now().toString(36) + Math.random().toString(36).substr(2)
+    timestamp: new Date().toISOString()
   });
 });
 
-// MongoDB connection event handlers
+// MongoDB connection event handlers - UPDATED
 mongoose.connection.on('connected', () => {
   console.log('✅ Mongoose connected to MongoDB Atlas');
   console.log(`📊 Database: ${mongoose.connection.name}`);
   console.log(`🏠 Host: ${mongoose.connection.host}`);
   console.log(`🔗 Connection State: ${mongoose.connection.readyState}`);
   console.log('🎯 Database is ready to accept connections!');
-  console.log('🔗 Your frontend (https://taupe-scone-358de8.netlify.app) can now connect to this backend');
+  console.log(`🔗 Your frontend (${process.env.FRONTEND_URL}) can now connect to this backend`);
 });
 
 mongoose.connection.on('error', (err) => {
@@ -570,9 +464,7 @@ mongoose.connection.on('error', (err) => {
   console.log('💡 Troubleshooting tips:');
   console.log('   1. Check MongoDB Atlas connection string in .env');
   console.log('   2. Verify network connectivity');
-  console.log('   3. Check IP whitelist in MongoDB Atlas (add 0.0.0.0/0 for all)');
-  console.log('   4. Run node test-db.js to test connection');
-  console.log('   5. Ensure MongoDB Atlas cluster is running');
+  console.log('   3. Check IP whitelist in MongoDB Atlas');
 });
 
 mongoose.connection.on('disconnected', () => {
@@ -592,9 +484,7 @@ const startServer = async () => {
       console.log(`\n🎉 SUCCESS: Server started successfully!`);
       console.log(`🚀 Server running on port ${availablePort}`);
       console.log(`📍 Health check: http://localhost:${availablePort}/api/health`);
-      console.log(`👥 Users API: http://localhost:${availablePort}/users`);
       console.log(`📧 Contact form: http://localhost:${availablePort}/api/contact`);
-      console.log(`🧪 Test endpoint: http://localhost:${availablePort}/api/test`);
       console.log(`💾 Database: ${mongoose.connection.readyState === 1 ? 'Connected ✅' : 'Disconnected ❌'}`);
       console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`⏰ Server started at: ${new Date().toISOString()}`);
@@ -609,13 +499,13 @@ const startServer = async () => {
       
       // Frontend connection info
       console.log(`\n🔗 Frontend Connection Info:`);
-      console.log(`   Frontend URL: https://taupe-scone-358de8.netlify.app`);
-      console.log(`   Backend URL: https://protfolio-backend-8p47.onrender.com`);
-      console.log(`   CORS configured for Netlify domains`);
+      console.log(`   Frontend URL: ${process.env.FRONTEND_URL}`);
+      console.log(`   Backend URL: ${process.env.RENDER_EXTERNAL_URL || 'http://localhost:' + availablePort}`);
+      console.log(`   CORS configured for: ${process.env.CORS_ORIGIN}`);
       console.log(`   Contact form endpoints are ready`);
       
       console.log(`\n📋 Quick Test:`);
-      console.log(`   1. Visit: https://taupe-scone-358de8.netlify.app`);
+      console.log(`   1. Visit: ${process.env.FRONTEND_URL}`);
       console.log(`   2. Check backend status in Contact section`);
       console.log(`   3. Test form submission`);
       
@@ -623,10 +513,6 @@ const startServer = async () => {
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error.message);
-    console.log('\n💡 Troubleshooting:');
-    console.log('   1. Check if port 10000-10010 is available');
-    console.log('   2. Try changing PORT in .env file');
-    console.log('   3. Check for other running Node.js processes');
     process.exit(1);
   }
 };

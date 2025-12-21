@@ -14,9 +14,9 @@ import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
 import SpeedIcon from "@mui/icons-material/Speed";
 import SecurityIcon from "@mui/icons-material/Security";
 
-// Environment configuration
+// Environment configuration - FIXED
 const API_URL = import.meta.env.VITE_API_URL || "https://protfolio-backend-8p47.onrender.com";
-const FRONTEND_URL = import.meta.env.VITE_FRONTEND_URL || "https://aditya-auchar-portfolio-frontend.onrender.com";
+const FRONTEND_URL = import.meta.env.VITE_FRONTEND_URL || "https://protfolio-frontend-ytfj.onrender.com";
 const IS_RENDER = import.meta.env.VITE_RENDER === "true";
 
 // TypeScript interfaces
