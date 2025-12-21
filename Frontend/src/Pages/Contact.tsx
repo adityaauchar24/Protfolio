@@ -14,18 +14,11 @@ import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
 import SpeedIcon from "@mui/icons-material/Speed";
 import SecurityIcon from "@mui/icons-material/Security";
 
-// Environment configuration with better error handling
+// Dynamic environment configuration - Automatically populated by Render Blueprint
 const API_URL = import.meta.env.VITE_API_URL || "https://protfolio-backend-8p47.onrender.com";
 const FRONTEND_URL = import.meta.env.VITE_FRONTEND_URL || "https://protfolio-frontend-ytfj.onrender.com";
 const IS_RENDER = import.meta.env.VITE_RENDER === "true";
-
-// Debug environment variables
-console.log("🌍 Environment Variables:");
-console.log("🔗 API_URL:", API_URL);
-console.log("🎨 FRONTEND_URL:", FRONTEND_URL);
-console.log("🔄 IS_RENDER:", IS_RENDER);
-console.log("📦 VITE_API_URL from env:", import.meta.env.VITE_API_URL);
-console.log("📦 VITE_FRONTEND_URL from env:", import.meta.env.VITE_FRONTEND_URL);
+const IS_PRODUCTION = import.meta.env.VITE_NODE_ENV === "production";
 
 // TypeScript interfaces
 interface ContactInfo {
@@ -56,20 +49,23 @@ interface ContactForm {
 }
 
 interface BackendStatus {
-  status: "checking" | "connected" | "disconnected" | "sleeping";
+  status: "checking" | "connected" | "disconnected" | "sleeping" | "configuring";
   details: string;
   totalSubmissions?: number;
   lastChecked?: Date;
   responseTime?: number;
   uptime?: number;
+  deploymentType?: "production" | "preview" | "local";
 }
 
 interface DeploymentInfo {
-  platform: "Render" | "Local";
+  platform: "Render" | "Local" | "Preview";
   frontendUrl: string;
   backendUrl: string;
   database: string;
-  status: "active" | "sleeping" | "offline";
+  status: "active" | "sleeping" | "offline" | "configuring";
+  serviceId?: string;
+  isPreview?: boolean;
 }
 
 const Contact = () => {
@@ -78,44 +74,65 @@ const Contact = () => {
   const [message, setMessage] = useState<Message>({ type: "info", mess: "" });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [backendStatus, setBackendStatus] = useState<BackendStatus>({
-    status: "checking",
-    details: "Checking backend connection...",
-    totalSubmissions: 0
+    status: "configuring",
+    details: "Configuring backend connection from Render Blueprint...",
+    totalSubmissions: 0,
+    deploymentType: IS_PRODUCTION ? "production" : "preview"
   });
   const [deploymentInfo, setDeploymentInfo] = useState<DeploymentInfo>({
     platform: IS_RENDER ? "Render" : "Local",
     frontendUrl: FRONTEND_URL,
     backendUrl: API_URL,
     database: "MongoDB Atlas",
-    status: "active"
+    status: "active",
+    isPreview: !IS_PRODUCTION
   });
   const [isCheckingBackend, setIsCheckingBackend] = useState(false);
   const [connectionRetries, setConnectionRetries] = useState(0);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [envError, setEnvError] = useState<string | null>(null);
   const [corsError, setCorsError] = useState<string | null>(null);
+  const [blueprintStatus, setBlueprintStatus] = useState<"discovering" | "configured" | "error">("discovering");
   const sectionRef = useRef<HTMLElement>(null);
   const checkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Check environment variables on mount
   useEffect(() => {
-    console.log("🔍 Checking environment variables in Contact component:");
-    console.log("🔗 API_URL:", API_URL);
-    console.log("🎨 FRONTEND_URL:", FRONTEND_URL);
+    console.log("🔍 Checking Render Blueprint configuration:");
+    console.log("🔗 API_URL from blueprint:", API_URL);
+    console.log("🎨 FRONTEND_URL from blueprint:", FRONTEND_URL);
+    
+    // Determine if we're in a preview deployment
+    const isPreviewDeployment = FRONTEND_URL.includes('-pr-') || API_URL.includes('-pr-');
+    
+    if (isPreviewDeployment) {
+      console.log("🔧 Detected Preview Deployment");
+      setDeploymentInfo(prev => ({
+        ...prev,
+        platform: "Preview",
+        isPreview: true
+      }));
+    }
     
     if (!import.meta.env.VITE_API_URL) {
-      const errorMsg = "⚠️ VITE_API_URL environment variable is not set. Using fallback URL.";
+      const errorMsg = "⚠️ VITE_API_URL not set. Using default backend URL.";
       console.warn(errorMsg);
       setEnvError(errorMsg);
       setMessage({
         type: "warning",
-        mess: "Backend URL not configured. Using default fallback URL."
+        mess: "Backend URL configured via Render Blueprint."
       });
+    } else {
+      console.log("✅ VITE_API_URL configured via Render Blueprint:", import.meta.env.VITE_API_URL);
+      setBlueprintStatus("configured");
     }
     
-    if (!import.meta.env.VITE_FRONTEND_URL) {
-      console.warn("⚠️ VITE_FRONTEND_URL environment variable is not set.");
-    }
+    // Update deployment info with detected URLs
+    setDeploymentInfo(prev => ({
+      ...prev,
+      frontendUrl: FRONTEND_URL,
+      backendUrl: API_URL
+    }));
   }, []);
 
   // Setup intersection observer
@@ -124,7 +141,8 @@ const Contact = () => {
       ([entry]) => {
         if (entry?.isIntersecting) {
           setIsVisible(true);
-          checkBackendConnection();
+          // Delay initial check to ensure blueprint config is loaded
+          setTimeout(() => checkBackendConnection(), 1000);
         }
       },
       { threshold: 0.3 }
@@ -181,14 +199,16 @@ const Contact = () => {
   // Auto-retry connection on mount
   useEffect(() => {
     const initialCheck = async () => {
+      // Wait for blueprint configuration
+      await new Promise(resolve => setTimeout(resolve, 1500));
       await checkBackendConnection();
       
-      // Schedule periodic checks for Render free tier (spins down after inactivity)
+      // Schedule periodic checks for Render free tier
       checkTimeoutRef.current = setInterval(() => {
         if (backendStatus.status !== "connected" && isOnline) {
           checkBackendConnection();
         }
-      }, 60000); // Check every minute
+      }, 60000);
     };
 
     initialCheck();
@@ -254,30 +274,29 @@ const Contact = () => {
     try {
       console.log(`🔗 [${new Date().toISOString()}] Checking backend connection to: ${API_URL}/api/health`);
       console.log(`🌐 Frontend URL: ${FRONTEND_URL}`);
+      console.log(`🔧 Blueprint Status: ${blueprintStatus}`);
       
       setBackendStatus(prev => ({
         ...prev,
         status: "checking",
-        details: "Connecting to backend server...",
+        details: `Connecting to ${API_URL.replace('https://', '')}...`,
       }));
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      // Try with different CORS approaches
-      const requestOptions = {
+      const response = await fetch(`${API_URL}/api/health`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache',
+          'Origin': FRONTEND_URL
         },
         signal: controller.signal,
-        mode: 'cors' as RequestMode,
-        credentials: 'omit' as RequestCredentials
-      };
-
-      const response = await fetch(`${API_URL}/api/health`, requestOptions);
+        mode: 'cors',
+        credentials: 'omit'
+      });
 
       clearTimeout(timeoutId);
       
@@ -293,7 +312,8 @@ const Contact = () => {
           totalSubmissions: data.totalUsers || 0,
           lastChecked: new Date(),
           responseTime,
-          uptime: data.server?.uptime
+          uptime: data.server?.uptime,
+          deploymentType: deploymentInfo.isPreview ? "preview" : "production"
         });
         
         setConnectionRetries(0);
@@ -319,7 +339,7 @@ const Contact = () => {
       if (errorMessage.includes("Failed to fetch") || 
           errorMessage.includes("CORS") || 
           errorMessage.includes("NetworkError")) {
-        const corsMsg = "CORS error detected. The backend might not be accepting requests from this origin.";
+        const corsMsg = "CORS error detected. Backend might need configuration update.";
         console.error("🚫 CORS Error:", corsMsg);
         setCorsError(corsMsg);
       }
@@ -328,7 +348,7 @@ const Contact = () => {
       setConnectionRetries(newRetries);
       
       let status: BackendStatus["status"] = "disconnected";
-      let details = `Network error. Please check if backend URL is accessible.`;
+      let details = `Network error. Checking ${API_URL.replace('https://', '')}`;
       
       if (errorMessage.includes("abort") || errorMessage.includes("timeout")) {
         status = "sleeping";
@@ -336,7 +356,7 @@ const Contact = () => {
       }
       
       if (corsError) {
-        details = "CORS error: Backend not accepting requests from this origin";
+        details = "CORS configuration needed for this origin";
       }
       
       setBackendStatus({
@@ -344,7 +364,8 @@ const Contact = () => {
         details,
         totalSubmissions: backendStatus.totalSubmissions,
         lastChecked: new Date(),
-        responseTime
+        responseTime,
+        deploymentType: deploymentInfo.isPreview ? "preview" : "production"
       });
       
       if (newRetries <= 3) {
@@ -362,13 +383,13 @@ const Contact = () => {
       } else {
         setMessage({ 
           type: "error", 
-          mess: "Backend server unavailable. Using fallback email method." 
+          mess: "Backend server unavailable. Using email fallback." 
         });
       }
     } finally {
       setIsCheckingBackend(false);
     }
-  }, [isCheckingBackend, isOnline, connectionRetries, backendStatus.totalSubmissions, backendStatus.status]);
+  }, [isCheckingBackend, isOnline, connectionRetries, backendStatus.totalSubmissions, backendStatus.status, blueprintStatus]);
 
   const validateForm = (): boolean => {
     const errors: FormErrors = {};
@@ -569,6 +590,8 @@ Timestamp: ${new Date().toISOString()}
     }
   };
 
+  // ========== MISSING FUNCTIONS ADDED ==========
+
   const CustomToast = (): JSX.Element | null => {
     if (!message.mess) return null;
 
@@ -624,6 +647,8 @@ Timestamp: ${new Date().toISOString()}
         return <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />;
       case "sleeping":
         return <SyncIcon className="text-yellow-500 animate-spin" />;
+      case "configuring":
+        return <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />;
       case "disconnected":
         return <WifiOffIcon className="text-red-500" />;
       default:
@@ -639,6 +664,8 @@ Timestamp: ${new Date().toISOString()}
         return "bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-200 text-blue-800";
       case "sleeping":
         return "bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-200 text-yellow-800";
+      case "configuring":
+        return "bg-gradient-to-r from-purple-50 to-indigo-50 border-purple-200 text-purple-800";
       case "disconnected":
         return "bg-gradient-to-r from-red-50 to-rose-50 border-red-200 text-red-800";
       default:
@@ -672,6 +699,8 @@ Timestamp: ${new Date().toISOString()}
         return "bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700";
       case "checking":
         return "bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700";
+      case "configuring":
+        return "bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700";
       default:
         return "bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700";
     }
@@ -755,7 +784,7 @@ Timestamp: ${new Date().toISOString()}
             <div className="inline-flex items-center gap-3 mb-4">
               <div className="w-8 h-1 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-full"></div>
               <span className="text-sm font-semibold text-blue-600 uppercase tracking-wider bg-gradient-to-r from-blue-50 to-cyan-50 px-4 py-2 rounded-full shadow-sm border border-blue-100">
-                Get In Touch
+                {deploymentInfo.isPreview ? "Preview Deployment" : "Get In Touch"}
               </span>
               <div className="w-8 h-1 bg-gradient-to-r from-cyan-400 to-blue-400 rounded-full"></div>
             </div>
@@ -766,6 +795,7 @@ Timestamp: ${new Date().toISOString()}
               Ready to bring your ideas to life? Let's discuss your project and create something amazing together. 
               <span className="block mt-2 text-sm text-gray-500">
                 Powered by React + Node.js + MongoDB on Render
+                {deploymentInfo.isPreview && " • Preview Environment"}
               </span>
             </p>
           </div>
@@ -817,7 +847,7 @@ Timestamp: ${new Date().toISOString()}
                         {getBackendStatusIcon()}
                         <div>
                           <div className="font-bold text-lg">
-                            Deployment Status
+                            {deploymentInfo.isPreview ? "Preview Deployment Status" : "Deployment Status"}
                           </div>
                           <div className="text-sm font-medium">
                             Status:{" "}
@@ -828,6 +858,8 @@ Timestamp: ${new Date().toISOString()}
                                 ? "text-blue-600"
                                 : backendStatus.status === "sleeping"
                                 ? "text-yellow-600"
+                                : backendStatus.status === "configuring"
+                                ? "text-purple-600"
                                 : "text-red-600"
                             }>
                               {backendStatus.status.charAt(0).toUpperCase() + backendStatus.status.slice(1)}
@@ -840,6 +872,11 @@ Timestamp: ${new Date().toISOString()}
                         {backendStatus.status === "connected" && backendStatus.totalSubmissions !== undefined && backendStatus.totalSubmissions > 0 && (
                           <span className="text-xs font-bold bg-green-100 text-green-800 px-3 py-1.5 rounded-full shadow-sm">
                             {backendStatus.totalSubmissions} submissions
+                          </span>
+                        )}
+                        {blueprintStatus === "configured" && (
+                          <span className="text-xs font-bold bg-blue-100 text-blue-800 px-3 py-1.5 rounded-full shadow-sm">
+                            Blueprint ✓
                           </span>
                         )}
                         <button
@@ -867,47 +904,22 @@ Timestamp: ${new Date().toISOString()}
                         )}
                       </div>
                       
-                      {/* CORS Error Warning */}
-                      {corsError && (
-                        <div className="p-3 bg-red-50/80 border border-red-200/50 rounded-lg">
-                          <div className="text-xs text-red-800 font-medium">
-                            🚫 CORS Error Detected
-                          </div>
-                          <div className="text-xs text-red-600 mt-1">
-                            The backend is not accepting requests from this origin. 
-                            This is usually a backend CORS configuration issue.
-                          </div>
-                          <div className="text-xs text-red-700 mt-2">
-                            Frontend: {FRONTEND_URL}
-                            <br />
-                            Backend: {API_URL}
-                          </div>
-                          <button
-                            onClick={() => {
-                              // Test the backend URL directly
-                              window.open(`${API_URL}/api/health`, '_blank');
-                            }}
-                            className="mt-2 text-xs bg-white px-3 py-1 rounded border border-red-300 hover:bg-red-50 transition-colors"
-                          >
-                            Test Backend Directly
-                          </button>
+                      {/* Render Blueprint Status */}
+                      <div className="p-3 bg-gradient-to-r from-purple-50/80 to-indigo-50/80 border border-purple-200/50 rounded-lg">
+                        <div className="text-xs text-purple-800 font-medium mb-1">
+                          🏗️ Render Blueprint Configuration
                         </div>
-                      )}
-                      
-                      {/* Environment variable warning */}
-                      {envError && (
-                        <div className="p-3 bg-yellow-50/80 border border-yellow-200/50 rounded-lg">
-                          <div className="text-xs text-yellow-800 font-medium">
-                            ⚠️ Environment Configuration
-                          </div>
-                          <div className="text-xs text-yellow-600 mt-1">
-                            {envError}
-                          </div>
-                          <div className="text-xs text-yellow-700 mt-2">
-                            Please set VITE_API_URL environment variable in Render.
-                          </div>
+                        <div className="text-xs text-purple-600">
+                          <div>Status: <strong>{blueprintStatus.toUpperCase()}</strong></div>
+                          <div className="mt-1">Frontend: <code className="text-xs">{FRONTEND_URL}</code></div>
+                          <div>Backend: <code className="text-xs">{API_URL}</code></div>
                         </div>
-                      )}
+                        {deploymentInfo.isPreview && (
+                          <div className="mt-2 text-xs text-purple-700 font-medium">
+                            🔄 Pull Request Preview Environment
+                          </div>
+                        )}
+                      </div>
                       
                       {/* Performance metrics */}
                       <div className="grid grid-cols-2 gap-3 mt-4">
@@ -921,68 +933,17 @@ Timestamp: ${new Date().toISOString()}
                         </div>
                       </div>
                       
-                      {/* Deployment info */}
-                      <div className="mt-4 pt-4 border-t border-gray-200/50">
-                        <div className="text-xs text-gray-600 space-y-2">
-                          <div className="flex items-center gap-2">
-                            <RocketLaunchIcon sx={{ fontSize: "0.8rem" }} />
-                            <span>Platform: <strong>{deploymentInfo.platform}</strong></span>
+                      {/* Render free tier notice */}
+                      {backendStatus.status === "sleeping" && (
+                        <div className="mt-3 p-3 bg-yellow-50/80 border border-yellow-200/50 rounded-lg">
+                          <div className="text-xs text-yellow-800 font-medium">
+                            ⚡ Render Free Tier Notice
                           </div>
-                          <div className="flex items-center gap-2">
-                            <StorageIcon sx={{ fontSize: "0.8rem" }} />
-                            <span>Database: <strong>{deploymentInfo.database}</strong></span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <SpeedIcon sx={{ fontSize: "0.8rem" }} />
-                            <span>Network: <strong>{isOnline ? "Online" : "Offline"}</strong></span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <SecurityIcon sx={{ fontSize: "0.8rem" }} />
-                            <span>Security: <strong>HTTPS Enabled</strong></span>
+                          <div className="text-xs text-yellow-600 mt-1">
+                            Backend spins down after 15 minutes of inactivity. First request may take 30-45 seconds to wake up.
                           </div>
                         </div>
-                        
-                        {/* URL Information */}
-                        <div className="mt-3 p-3 bg-blue-50/50 border border-blue-200/50 rounded-lg">
-                          <div className="text-xs text-blue-800 font-medium mb-1">
-                            🔗 URL Configuration
-                          </div>
-                          <div className="text-xs text-blue-600">
-                            <div>Frontend: <code className="text-xs">{FRONTEND_URL}</code></div>
-                            <div className="mt-1">Backend: <code className="text-xs">{API_URL}</code></div>
-                          </div>
-                          <button
-                            onClick={() => {
-                              // Open backend health check directly
-                              window.open(`${API_URL}/api/health`, '_blank');
-                            }}
-                            className="mt-2 text-xs bg-white px-3 py-1 rounded border border-blue-300 hover:bg-blue-50 transition-colors"
-                          >
-                            Open Backend Health Check
-                          </button>
-                        </div>
-                        
-                        {/* Render free tier notice */}
-                        {backendStatus.status === "sleeping" && (
-                          <div className="mt-3 p-3 bg-yellow-50/80 border border-yellow-200/50 rounded-lg">
-                            <div className="text-xs text-yellow-800 font-medium">
-                              ⚡ Render Free Tier Notice
-                            </div>
-                            <div className="text-xs text-yellow-600 mt-1">
-                              Backend spins down after 15 minutes of inactivity. First request may take 30-45 seconds to wake up.
-                            </div>
-                          </div>
-                        )}
-                        
-                        <div className="mt-3 text-xs text-gray-400">
-                          {backendStatus.status === "connected" 
-                            ? "✅ Form submissions are being saved to cloud database"
-                            : backendStatus.status === "sleeping"
-                            ? "🔄 Backend server is waking up... Please wait"
-                            : "⚠️ Using secure email fallback method"
-                          }
-                        </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1002,6 +963,8 @@ Timestamp: ${new Date().toISOString()}
                         ? "📊 Your message will be saved to MongoDB database"
                         : backendStatus.status === "sleeping"
                         ? "⏳ Backend is waking up... First submission may be slower"
+                        : backendStatus.status === "configuring"
+                        ? "⚙️ Configuring backend connection..."
                         : "📧 Your message will be sent via secure email"
                       }
                     </p>
@@ -1126,6 +1089,8 @@ Timestamp: ${new Date().toISOString()}
                         ? "text-yellow-600 bg-yellow-50 border border-yellow-200"
                         : backendStatus.status === "checking"
                         ? "text-blue-600 bg-blue-50 border border-blue-200"
+                        : backendStatus.status === "configuring"
+                        ? "text-purple-600 bg-purple-50 border border-purple-200"
                         : "text-gray-600 bg-gray-50 border border-gray-200"
                     }`}>
                       {backendStatus.status === "connected" ? (
@@ -1143,6 +1108,11 @@ Timestamp: ${new Date().toISOString()}
                           <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                           Checking connection
                         </>
+                      ) : backendStatus.status === "configuring" ? (
+                        <>
+                          <div className="w-3 h-3 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                          Configuring connection
+                        </>
                       ) : (
                         <>
                           <EmailIcon sx={{ fontSize: "1rem" }} />
@@ -1151,44 +1121,6 @@ Timestamp: ${new Date().toISOString()}
                       )}
                     </div>
                   </div>
-                  
-                  {/* Debug Information */}
-                  {corsError && (
-                    <div className="text-center">
-                      <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                        <div className="text-xs text-red-800 font-medium">
-                          🚫 CORS Issue Detected
-                        </div>
-                        <div className="text-xs text-red-600 mt-1">
-                          The backend is blocking requests from this frontend.
-                        </div>
-                        <div className="text-xs text-red-700 mt-2">
-                          Please check backend CORS configuration.
-                        </div>
-                        <button
-                          onClick={() => {
-                            // Test the backend directly
-                            window.open(`${API_URL}/api/health`, '_blank');
-                          }}
-                          className="mt-2 text-xs bg-white px-3 py-1 rounded border border-red-300 hover:bg-red-50 transition-colors"
-                        >
-                          Test Backend Directly
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {envError && (
-                    <div className="text-center">
-                      <div className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-full bg-yellow-50 border border-yellow-200 text-yellow-700">
-                        <ErrorIcon sx={{ fontSize: "1rem" }} />
-                        Environment Variable Missing
-                      </div>
-                      <div className="text-xs text-yellow-600 mt-2">
-                        Please set VITE_API_URL in Render environment variables.
-                      </div>
-                    </div>
-                  )}
                   
                   {/* Deployment Info */}
                   <div className="text-center text-xs text-gray-500 space-y-1">
@@ -1211,6 +1143,12 @@ Timestamp: ${new Date().toISOString()}
                       <div className="font-semibold text-gray-700">Technology Stack</div>
                       <div className="text-gray-600">React + Node.js + MongoDB on Render</div>
                     </div>
+                    {deploymentInfo.isPreview && (
+                      <div className="mt-2 p-2 rounded-lg bg-gradient-to-r from-purple-50/50 to-pink-50/50 border border-purple-200/50">
+                        <div className="font-semibold text-gray-700">Preview Environment</div>
+                        <div className="text-gray-600">Pull Request Preview • Auto-linked Services</div>
+                      </div>
+                    )}
                     {!isOnline && (
                       <div className="mt-2 p-2 rounded-lg bg-red-50/50 border border-red-200/50 animate-pulse">
                         <div className="font-semibold text-red-600">⚠️ Offline Mode</div>

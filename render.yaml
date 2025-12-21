@@ -1,0 +1,83 @@
+# render.yaml - Unified Blueprint for Portfolio Deployment
+version: 1
+services:
+  # Backend Service (Node.js API)
+  - type: web
+    name: protfolio-backend
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: ./Backend
+    buildCommand: npm install
+    startCommand: node index.js
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false  # Set in Render dashboard
+      - key: CORS_ORIGIN
+        fromService:
+          name: protfolio-frontend
+          type: web
+          property: url
+      - key: FRONTEND_URL
+        fromService:
+          name: protfolio-frontend
+          type: web
+          property: url
+
+  # Frontend Service (Static React App)
+  - type: web
+    name: protfolio-frontend
+    runtime: static
+    region: oregon
+    plan: free
+    rootDir: ./Frontend
+    buildCommand: |
+      npm install
+      npm run build
+    staticPublishPath: ./dist
+    pullRequestPreviewsEnabled: true
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=3600
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: protfolio-backend
+          type: web
+          property: url
+      - key: VITE_FRONTEND_URL
+        fromService:
+          name: protfolio-frontend
+          type: web
+          property: url
+      - key: VITE_RENDER
+        value: "true"
+      - key: VITE_NODE_ENV
+        value: production
