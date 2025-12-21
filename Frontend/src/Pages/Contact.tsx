@@ -420,7 +420,7 @@ Sent from Aditya Auchar's Portfolio Website
     }
     
     return backendStatus.status === "connected" 
-      ? "Send Message to Database" 
+      ? "Send Message" 
       : "Send Message via Email";
   };
 
@@ -512,76 +512,6 @@ Sent from Aditya Auchar's Portfolio Website
                   ))}
                 </div>
 
-                <div className="mt-8">
-                  <div className={`p-4 rounded-2xl border transition-all duration-300 ${getBackendStatusColor()}`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        {getBackendStatusIcon()}
-                        <span className="font-semibold">
-                          Backend Status:{" "}
-                          <span className={
-                            backendStatus.status === "connected" 
-                              ? "text-green-600" 
-                              : backendStatus.status === "checking" 
-                              ? "text-blue-600" 
-                              : "text-red-600"
-                          }>
-                            {backendStatus.status.charAt(0).toUpperCase() + backendStatus.status.slice(1)}
-                          </span>
-                        </span>
-                      </div>
-                      {backendStatus.status === "connected" && backendStatus.totalSubmissions !== undefined && backendStatus.totalSubmissions > 0 && (
-                        <span className="text-xs font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                          {backendStatus.totalSubmissions} submissions
-                        </span>
-                      )}
-                      <button
-                        onClick={checkBackendConnection}
-                        disabled={isCheckingBackend}
-                        className="text-sm text-blue-600 hover:text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Check connection"
-                      >
-                        {isCheckingBackend ? (
-                          <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <SyncIcon sx={{ fontSize: "1rem" }} />
-                        )}
-                      </button>
-                    </div>
-                    
-                    <div className="text-sm mb-3">
-                      {backendStatus.details}
-                      {backendStatus.lastChecked && (
-                        <span className="text-xs text-gray-500 ml-2">
-                          (Last checked: {backendStatus.lastChecked.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
-                        </span>
-                      )}
-                    </div>
-                    
-                    <div className="mt-3 pt-3 border-t border-gray-200/50">
-                      <div className="text-xs text-gray-500 flex items-center gap-1">
-                        <CloudIcon sx={{ fontSize: "0.8rem" }} />
-                        Backend URL: {API_URL}
-                      </div>
-                      <div className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                        <div className="w-3 h-3 bg-gradient-to-r from-green-400 to-blue-500 rounded-full"></div>
-                        Database: MongoDB Atlas (Cloud)
-                      </div>
-                      <div className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                        <div className="w-3 h-3 bg-gradient-to-r from-purple-400 to-pink-500 rounded-full"></div>
-                        Hosting: Render (Free Tier)
-                      </div>
-                      <div className="text-xs text-gray-400 mt-2">
-                        {backendStatus.status === "connected" 
-                          ? "✅ Form submissions will be saved to database"
-                          : backendStatus.status === "checking"
-                          ? "🔄 Checking backend availability..."
-                          : "⚠️ Using email fallback method"
-                        }
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -691,50 +621,6 @@ Sent from Aditya Auchar's Portfolio Website
                   </button>
                 </form>
 
-                <div className="mt-6 space-y-3">
-                  <div className="text-center">
-                    <div className={`inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full ${
-                      backendStatus.status === "connected" 
-                        ? "text-green-600 bg-green-50" 
-                        : backendStatus.status === "checking"
-                        ? "text-blue-600 bg-blue-50"
-                        : "text-yellow-600 bg-yellow-50"
-                    }`}>
-                      {backendStatus.status === "connected" ? (
-                        <>
-                          <CloudIcon sx={{ fontSize: "0.8rem" }} />
-                          Connected to backend database
-                        </>
-                      ) : backendStatus.status === "checking" ? (
-                        <>
-                          <SyncIcon sx={{ fontSize: "0.8rem" }} className="animate-spin" />
-                          Checking backend connection
-                        </>
-                      ) : (
-                        <>
-                          <EmailIcon sx={{ fontSize: "0.8rem" }} />
-                          Using email fallback method
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="text-center text-xs text-gray-400">
-                    <p>Powered by: React + Node.js + MongoDB</p>
-                    <p className="mt-1">
-                      {backendStatus.status === "connected" 
-                        ? "Backend: https://protfolio-backend-8p47.onrender.com"
-                        : "Frontend: Static React App"
-                      }
-                    </p>
-                    <p className="mt-1">
-                      {backendStatus.status === "connected"
-                        ? "Data storage: MongoDB Atlas Cloud Database"
-                        : "Communication: Direct email via mailto links"
-                      }
-                    </p>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
