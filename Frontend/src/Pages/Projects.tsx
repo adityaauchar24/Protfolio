@@ -72,7 +72,7 @@ const Projects = () => {
       detail: "A responsive static website for business showcasing services and contact information. Built with modern web standards and optimized for performance across all devices.",
       img: madiraWebImg,
       gitUrl: "https://github.com/adityaauchar24/Mandiri-website",
-      liveUrl: "papaya-sawine-880e7c.netlify.app",
+      liveUrl: "https://papaya-sawine-880e7c.netlify.app/",
       technologies: ["React.js", "Node.js", "MongoDB", "Redux"],
       category: "Business Website",
       featured: false
