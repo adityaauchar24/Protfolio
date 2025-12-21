@@ -79,7 +79,6 @@ const About = () => {
     {
       title: "Meta",
       role: "Frontend Developer Intern",
-      period: "May 2024 - Present",
       description: "Working on international trade platform development with real-time data communication and REST API integration.",
       technologies: ["React.js", "TypeScript", "Node.js", "MongoDB", "Material UI"],
       icon: <BusinessIcon className="text-lg sm:text-xl" />,
@@ -88,7 +87,6 @@ const About = () => {
     {
       title: "Freelance Projects",
       role: "Full Stack Developer",
-      period: "Jan 2023 - Apr 2024",
       description: "Developed multiple full-stack applications with modern UI/UX, focusing on scalability and performance optimization.",
       technologies: ["React", "Node.js", "Express", "MongoDB", "Tailwind CSS"],
       icon: <WorkIcon className="text-lg sm:text-xl" />,
@@ -97,7 +95,6 @@ const About = () => {
     {
       title: "Mesbro Projects",
       role: "Full Stack Developer",
-      period: "2021 - 2023",
       description: "Built various web applications and systems as part of chat Application, focusing on software engineering principles.",
       technologies: ["JavaScript", "HTML/CSS", "Python", "MySQL", "Bootstrap"],
       icon: <SchoolIcon className="text-lg sm:text-xl" />,
@@ -347,7 +344,7 @@ const About = () => {
                         <div className="flex-1">
                           <h4 className="font-bold text-gray-900 text-base md:text-lg">{exp.title}</h4>
                           <p className="text-xs md:text-sm text-red-600 font-medium">{exp.role}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">{exp.period}</p>
+                          
                         </div>
                       </div>
                       

@@ -60,8 +60,8 @@ const Projects = () => {
       name: "Portfolio Website",
       detail: "A professional portfolio website showcasing projects and skills with modern UI/UX design. Features smooth animations, responsive layout, and contact form integration.",
       img: protfolioWebsiteImg,
-      gitUrl: "https://github.com/adityaauchar24/Protfolio-website",
-      liveUrl: "http://localhost:4174/",
+      gitUrl: "https://github.com/adityaauchar24/Protfolio",
+      liveUrl: "https://protfolio-frontend-ytfj.onrender.com",
       technologies: ["React.js", "Node.js", "MongoDB", "Redux"],
       category: "Web Development",
       featured: true
@@ -72,7 +72,7 @@ const Projects = () => {
       detail: "A responsive static website for business showcasing services and contact information. Built with modern web standards and optimized for performance across all devices.",
       img: madiraWebImg,
       gitUrl: "https://github.com/adityaauchar24/Mandiri-website",
-      liveUrl: "http://localhost:3000/",
+      liveUrl: "papaya-sawine-880e7c.netlify.app",
       technologies: ["React.js", "Node.js", "MongoDB", "Redux"],
       category: "Business Website",
       featured: false
