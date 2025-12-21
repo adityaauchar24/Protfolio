@@ -93,6 +93,7 @@ const Contact = () => {
   const [connectionRetries, setConnectionRetries] = useState(0);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [envError, setEnvError] = useState<string | null>(null);
+  const [corsError, setCorsError] = useState<string | null>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const checkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -248,6 +249,7 @@ const Contact = () => {
     
     setIsCheckingBackend(true);
     const startTime = performance.now();
+    setCorsError(null);
     
     try {
       console.log(`🔗 [${new Date().toISOString()}] Checking backend connection to: ${API_URL}/api/health`);
@@ -260,18 +262,22 @@ const Contact = () => {
       }));
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased to 15s
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      const response = await fetch(`${API_URL}/api/health`, {
+      // Try with different CORS approaches
+      const requestOptions = {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache',
-          'Origin': FRONTEND_URL
         },
-        signal: controller.signal
-      });
+        signal: controller.signal,
+        mode: 'cors' as RequestMode,
+        credentials: 'omit' as RequestCredentials
+      };
+
+      const response = await fetch(`${API_URL}/api/health`, requestOptions);
 
       clearTimeout(timeoutId);
       
@@ -309,19 +315,28 @@ const Contact = () => {
       console.error(`🔗 API URL used: ${API_URL}`);
       console.error(`🌐 Frontend URL: ${FRONTEND_URL}`);
       
+      // Check if it's a CORS error
+      if (errorMessage.includes("Failed to fetch") || 
+          errorMessage.includes("CORS") || 
+          errorMessage.includes("NetworkError")) {
+        const corsMsg = "CORS error detected. The backend might not be accepting requests from this origin.";
+        console.error("🚫 CORS Error:", corsMsg);
+        setCorsError(corsMsg);
+      }
+      
       const newRetries = connectionRetries + 1;
       setConnectionRetries(newRetries);
       
       let status: BackendStatus["status"] = "disconnected";
-      let details = `Connection failed: ${errorMessage}`;
+      let details = `Network error. Please check if backend URL is accessible.`;
       
       if (errorMessage.includes("abort") || errorMessage.includes("timeout")) {
         status = "sleeping";
         details = "Backend server is waking up (Render free tier)...";
       }
       
-      if (errorMessage.includes("Failed to fetch")) {
-        details = "Network error. Please check if backend URL is accessible.";
+      if (corsError) {
+        details = "CORS error: Backend not accepting requests from this origin";
       }
       
       setBackendStatus({
@@ -415,13 +430,12 @@ const Contact = () => {
       console.log("🌐 Frontend URL for CORS:", FRONTEND_URL);
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000); // Increased to 20s
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
 
       const response = await fetch(`${API_URL}/api/contact`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Origin": FRONTEND_URL
         },
         body: JSON.stringify({
           fullname: contactForm.fullname.trim(),
@@ -432,7 +446,9 @@ const Contact = () => {
           source: "Render Frontend",
           frontendUrl: FRONTEND_URL
         }),
-        signal: controller.signal
+        signal: controller.signal,
+        mode: 'cors',
+        credentials: 'omit'
       });
 
       clearTimeout(timeoutId);
@@ -675,6 +691,22 @@ Timestamp: ${new Date().toISOString()}
     checkBackendConnection();
   };
 
+  // Function to test CORS with no-cors mode (for debugging)
+  const testCorsConnection = async () => {
+    try {
+      console.log("🔧 Testing CORS connection with no-cors mode...");
+      const response = await fetch(`${API_URL}/api/health`, {
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'text/plain'
+        }
+      });
+      console.log("🔧 No-CORS test response:", response);
+    } catch (error) {
+      console.error("🔧 No-CORS test error:", error);
+    }
+  };
+
   return (
     <>
       <style>
@@ -835,6 +867,33 @@ Timestamp: ${new Date().toISOString()}
                         )}
                       </div>
                       
+                      {/* CORS Error Warning */}
+                      {corsError && (
+                        <div className="p-3 bg-red-50/80 border border-red-200/50 rounded-lg">
+                          <div className="text-xs text-red-800 font-medium">
+                            🚫 CORS Error Detected
+                          </div>
+                          <div className="text-xs text-red-600 mt-1">
+                            The backend is not accepting requests from this origin. 
+                            This is usually a backend CORS configuration issue.
+                          </div>
+                          <div className="text-xs text-red-700 mt-2">
+                            Frontend: {FRONTEND_URL}
+                            <br />
+                            Backend: {API_URL}
+                          </div>
+                          <button
+                            onClick={() => {
+                              // Test the backend URL directly
+                              window.open(`${API_URL}/api/health`, '_blank');
+                            }}
+                            className="mt-2 text-xs bg-white px-3 py-1 rounded border border-red-300 hover:bg-red-50 transition-colors"
+                          >
+                            Test Backend Directly
+                          </button>
+                        </div>
+                      )}
+                      
                       {/* Environment variable warning */}
                       {envError && (
                         <div className="p-3 bg-yellow-50/80 border border-yellow-200/50 rounded-lg">
@@ -892,6 +951,15 @@ Timestamp: ${new Date().toISOString()}
                             <div>Frontend: <code className="text-xs">{FRONTEND_URL}</code></div>
                             <div className="mt-1">Backend: <code className="text-xs">{API_URL}</code></div>
                           </div>
+                          <button
+                            onClick={() => {
+                              // Open backend health check directly
+                              window.open(`${API_URL}/api/health`, '_blank');
+                            }}
+                            className="mt-2 text-xs bg-white px-3 py-1 rounded border border-blue-300 hover:bg-blue-50 transition-colors"
+                          >
+                            Open Backend Health Check
+                          </button>
                         </div>
                         
                         {/* Render free tier notice */}
@@ -1085,6 +1153,31 @@ Timestamp: ${new Date().toISOString()}
                   </div>
                   
                   {/* Debug Information */}
+                  {corsError && (
+                    <div className="text-center">
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <div className="text-xs text-red-800 font-medium">
+                          🚫 CORS Issue Detected
+                        </div>
+                        <div className="text-xs text-red-600 mt-1">
+                          The backend is blocking requests from this frontend.
+                        </div>
+                        <div className="text-xs text-red-700 mt-2">
+                          Please check backend CORS configuration.
+                        </div>
+                        <button
+                          onClick={() => {
+                            // Test the backend directly
+                            window.open(`${API_URL}/api/health`, '_blank');
+                          }}
+                          className="mt-2 text-xs bg-white px-3 py-1 rounded border border-red-300 hover:bg-red-50 transition-colors"
+                        >
+                          Test Backend Directly
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
                   {envError && (
                     <div className="text-center">
                       <div className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-full bg-yellow-50 border border-yellow-200 text-yellow-700">
