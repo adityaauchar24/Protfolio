@@ -14,10 +14,18 @@ import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
 import SpeedIcon from "@mui/icons-material/Speed";
 import SecurityIcon from "@mui/icons-material/Security";
 
-// Environment configuration - FIXED
+// Environment configuration with better error handling
 const API_URL = import.meta.env.VITE_API_URL || "https://protfolio-backend-8p47.onrender.com";
 const FRONTEND_URL = import.meta.env.VITE_FRONTEND_URL || "https://protfolio-frontend-ytfj.onrender.com";
 const IS_RENDER = import.meta.env.VITE_RENDER === "true";
+
+// Debug environment variables
+console.log("🌍 Environment Variables:");
+console.log("🔗 API_URL:", API_URL);
+console.log("🎨 FRONTEND_URL:", FRONTEND_URL);
+console.log("🔄 IS_RENDER:", IS_RENDER);
+console.log("📦 VITE_API_URL from env:", import.meta.env.VITE_API_URL);
+console.log("📦 VITE_FRONTEND_URL from env:", import.meta.env.VITE_FRONTEND_URL);
 
 // TypeScript interfaces
 interface ContactInfo {
@@ -84,8 +92,30 @@ const Contact = () => {
   const [isCheckingBackend, setIsCheckingBackend] = useState(false);
   const [connectionRetries, setConnectionRetries] = useState(0);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [envError, setEnvError] = useState<string | null>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const checkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Check environment variables on mount
+  useEffect(() => {
+    console.log("🔍 Checking environment variables in Contact component:");
+    console.log("🔗 API_URL:", API_URL);
+    console.log("🎨 FRONTEND_URL:", FRONTEND_URL);
+    
+    if (!import.meta.env.VITE_API_URL) {
+      const errorMsg = "⚠️ VITE_API_URL environment variable is not set. Using fallback URL.";
+      console.warn(errorMsg);
+      setEnvError(errorMsg);
+      setMessage({
+        type: "warning",
+        mess: "Backend URL not configured. Using default fallback URL."
+      });
+    }
+    
+    if (!import.meta.env.VITE_FRONTEND_URL) {
+      console.warn("⚠️ VITE_FRONTEND_URL environment variable is not set.");
+    }
+  }, []);
 
   // Setup intersection observer
   useEffect(() => {
@@ -110,8 +140,23 @@ const Contact = () => {
 
   // Online/offline detection
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    const handleOnline = () => {
+      console.log("🌐 Network: Online");
+      setIsOnline(true);
+      // Retry connection when coming back online
+      if (backendStatus.status !== "connected") {
+        setTimeout(() => checkBackendConnection(), 2000);
+      }
+    };
+    
+    const handleOffline = () => {
+      console.log("🌐 Network: Offline");
+      setIsOnline(false);
+      setMessage({
+        type: "error",
+        mess: "You are offline. Please check your internet connection."
+      });
+    };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -120,7 +165,7 @@ const Contact = () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []);
+  }, [backendStatus.status]);
 
   // Auto message dismissal
   useEffect(() => {
@@ -196,13 +241,17 @@ const Contact = () => {
   const [contactForm, setContactForm] = useState<ContactForm>(initialForm);
 
   const checkBackendConnection = useCallback(async (): Promise<void> => {
-    if (isCheckingBackend || !isOnline) return;
+    if (isCheckingBackend || !isOnline) {
+      console.log("⏸️ Backend check skipped:", { isCheckingBackend, isOnline });
+      return;
+    }
     
     setIsCheckingBackend(true);
     const startTime = performance.now();
     
     try {
       console.log(`🔗 [${new Date().toISOString()}] Checking backend connection to: ${API_URL}/api/health`);
+      console.log(`🌐 Frontend URL: ${FRONTEND_URL}`);
       
       setBackendStatus(prev => ({
         ...prev,
@@ -211,7 +260,7 @@ const Contact = () => {
       }));
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased to 15s
 
       const response = await fetch(`${API_URL}/api/health`, {
         method: 'GET',
@@ -219,6 +268,7 @@ const Contact = () => {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache',
+          'Origin': FRONTEND_URL
         },
         signal: controller.signal
       });
@@ -256,6 +306,8 @@ const Contact = () => {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       
       console.error(`❌ Backend connection failed:`, errorMessage);
+      console.error(`🔗 API URL used: ${API_URL}`);
+      console.error(`🌐 Frontend URL: ${FRONTEND_URL}`);
       
       const newRetries = connectionRetries + 1;
       setConnectionRetries(newRetries);
@@ -266,6 +318,10 @@ const Contact = () => {
       if (errorMessage.includes("abort") || errorMessage.includes("timeout")) {
         status = "sleeping";
         details = "Backend server is waking up (Render free tier)...";
+      }
+      
+      if (errorMessage.includes("Failed to fetch")) {
+        details = "Network error. Please check if backend URL is accessible.";
       }
       
       setBackendStatus({
@@ -356,14 +412,16 @@ const Contact = () => {
   const submitToBackend = async (): Promise<{success: boolean; message: string}> => {
     try {
       console.log("📤 Submitting to backend:", `${API_URL}/api/contact`);
+      console.log("🌐 Frontend URL for CORS:", FRONTEND_URL);
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const timeoutId = setTimeout(() => controller.abort(), 20000); // Increased to 20s
 
       const response = await fetch(`${API_URL}/api/contact`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Origin": FRONTEND_URL
         },
         body: JSON.stringify({
           fullname: contactForm.fullname.trim(),
@@ -371,7 +429,8 @@ const Contact = () => {
           address: contactForm.address.trim(),
           message: contactForm.message.trim(),
           timestamp: new Date().toISOString(),
-          source: "Render Frontend"
+          source: "Render Frontend",
+          frontendUrl: FRONTEND_URL
         }),
         signal: controller.signal
       });
@@ -416,6 +475,8 @@ Timestamp: ${new Date().toISOString()}
     `.trim();
 
     const mailtoLink = `mailto:adityaauchar40@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    
+    console.log("📧 Opening email fallback:", mailtoLink);
     
     // Try to open in new tab
     const newWindow = window.open(mailtoLink, '_blank');
@@ -605,6 +666,15 @@ Timestamp: ${new Date().toISOString()}
     return `${time}ms`;
   };
 
+  const handleManualRetry = () => {
+    console.log("🔄 Manual retry triggered");
+    setMessage({
+      type: "info",
+      mess: "Manually checking backend connection..."
+    });
+    checkBackendConnection();
+  };
+
   return (
     <>
       <style>
@@ -741,7 +811,7 @@ Timestamp: ${new Date().toISOString()}
                           </span>
                         )}
                         <button
-                          onClick={checkBackendConnection}
+                          onClick={handleManualRetry}
                           disabled={isCheckingBackend}
                           className="p-2 rounded-lg bg-white/50 hover:bg-white/80 backdrop-blur-sm transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow"
                           title="Check connection"
@@ -764,6 +834,21 @@ Timestamp: ${new Date().toISOString()}
                           </span>
                         )}
                       </div>
+                      
+                      {/* Environment variable warning */}
+                      {envError && (
+                        <div className="p-3 bg-yellow-50/80 border border-yellow-200/50 rounded-lg">
+                          <div className="text-xs text-yellow-800 font-medium">
+                            ⚠️ Environment Configuration
+                          </div>
+                          <div className="text-xs text-yellow-600 mt-1">
+                            {envError}
+                          </div>
+                          <div className="text-xs text-yellow-700 mt-2">
+                            Please set VITE_API_URL environment variable in Render.
+                          </div>
+                        </div>
+                      )}
                       
                       {/* Performance metrics */}
                       <div className="grid grid-cols-2 gap-3 mt-4">
@@ -795,6 +880,17 @@ Timestamp: ${new Date().toISOString()}
                           <div className="flex items-center gap-2">
                             <SecurityIcon sx={{ fontSize: "0.8rem" }} />
                             <span>Security: <strong>HTTPS Enabled</strong></span>
+                          </div>
+                        </div>
+                        
+                        {/* URL Information */}
+                        <div className="mt-3 p-3 bg-blue-50/50 border border-blue-200/50 rounded-lg">
+                          <div className="text-xs text-blue-800 font-medium mb-1">
+                            🔗 URL Configuration
+                          </div>
+                          <div className="text-xs text-blue-600">
+                            <div>Frontend: <code className="text-xs">{FRONTEND_URL}</code></div>
+                            <div className="mt-1">Backend: <code className="text-xs">{API_URL}</code></div>
                           </div>
                         </div>
                         
@@ -987,6 +1083,19 @@ Timestamp: ${new Date().toISOString()}
                       )}
                     </div>
                   </div>
+                  
+                  {/* Debug Information */}
+                  {envError && (
+                    <div className="text-center">
+                      <div className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-full bg-yellow-50 border border-yellow-200 text-yellow-700">
+                        <ErrorIcon sx={{ fontSize: "1rem" }} />
+                        Environment Variable Missing
+                      </div>
+                      <div className="text-xs text-yellow-600 mt-2">
+                        Please set VITE_API_URL in Render environment variables.
+                      </div>
+                    </div>
+                  )}
                   
                   {/* Deployment Info */}
                   <div className="text-center text-xs text-gray-500 space-y-1">
