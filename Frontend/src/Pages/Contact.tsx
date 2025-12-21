@@ -12,7 +12,6 @@ import WifiOffIcon from "@mui/icons-material/WifiOff";
 
 // Dynamic environment configuration
 const API_URL = import.meta.env.VITE_API_URL || "https://protfolio-backend-8p47.onrender.com";
-const IS_PRODUCTION = import.meta.env.VITE_NODE_ENV === "production";
 
 // TypeScript interfaces
 interface ContactInfo {
@@ -36,8 +35,6 @@ interface FormErrors {
 interface Message {
   type: "success" | "error" | "info" | "warning";
   mess: string;
-  id?: string;
-  timestamp?: Date;
 }
 
 interface ContactForm {
@@ -94,8 +91,6 @@ const Contact = () => {
       ([entry]) => {
         if (entry?.isIntersecting) {
           setIsVisible(true);
-          // Check backend connection when section becomes visible
-          checkBackendConnection();
         }
       },
       { threshold: 0.3, rootMargin: "50px" }
@@ -114,18 +109,11 @@ const Contact = () => {
   // Online/offline detection
   useEffect(() => {
     const handleOnline = () => {
-      console.log("🌐 Network: Online");
       setIsOnline(true);
       addMessage("success", "Network connection restored.");
-      
-      // Retry connection when coming back online
-      if (backendStatus.status !== "connected") {
-        setTimeout(() => checkBackendConnection(), 1000);
-      }
     };
     
     const handleOffline = () => {
-      console.log("🌐 Network: Offline");
       setIsOnline(false);
       addMessage("error", "Network connection lost. Working in offline mode.");
     };
@@ -137,7 +125,7 @@ const Contact = () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [backendStatus.status]);
+  }, []);
 
   // Auto message dismissal
   useEffect(() => {
@@ -149,29 +137,23 @@ const Contact = () => {
     }
   }, [message]);
 
-  // Auto-retry connection
+  // Initial backend check on mount (only once)
   useEffect(() => {
-    const initialCheck = async () => {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      await checkBackendConnection();
-      
-      // Schedule periodic checks
-      checkTimeoutRef.current = setInterval(() => {
-        if (backendStatus.status !== "connected" && isOnline) {
-          checkBackendConnection();
-        }
-      }, 30000);
+    const initialCheck = () => {
+      setTimeout(() => {
+        checkBackendConnection();
+      }, 1000);
     };
 
     initialCheck();
 
     return () => {
       if (checkTimeoutRef.current) {
-        clearInterval(checkTimeoutRef.current);
+        clearTimeout(checkTimeoutRef.current);
         checkTimeoutRef.current = null;
       }
     };
-  }, [isOnline]);
+  }, []);
 
   const contactInfo: ContactInfo[] = [
     { 
@@ -219,7 +201,6 @@ const Contact = () => {
 
   const checkBackendConnection = useCallback(async (): Promise<void> => {
     if (isCheckingBackend || !isOnline) {
-      console.log("⏸️ Backend check skipped:", { isCheckingBackend, isOnline });
       return;
     }
     
@@ -227,22 +208,20 @@ const Contact = () => {
     const startTime = performance.now();
     
     try {
-      console.log(`🔗 Checking backend connection to: ${API_URL}/api/health`);
-      
       setBackendStatus(prev => ({
         ...prev,
         status: "checking",
         details: "Establishing connection...",
       }));
 
+      // Simplified fetch without problematic headers
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
 
       const response = await fetch(`${API_URL}/api/health`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache',
         },
         signal: controller.signal,
         mode: 'cors',
@@ -261,18 +240,11 @@ const Contact = () => {
         });
         
         setConnectionRetries(0);
-        
-        if (connectionRetries > 0) {
-          addMessage("success", "Backend server reconnected successfully!");
-        }
       } else {
         throw new Error(`HTTP ${response.status}`);
       }
     } catch (error: unknown) {
       const responseTime = Math.round(performance.now() - startTime);
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      
-      console.error(`❌ Backend connection failed:`, errorMessage);
       
       const newRetries = connectionRetries + 1;
       setConnectionRetries(newRetries);
@@ -280,7 +252,7 @@ const Contact = () => {
       let status: BackendStatus["status"] = "disconnected";
       let details = "Connection failed";
       
-      if (errorMessage.includes("abort") || errorMessage.includes("timeout")) {
+      if (error instanceof Error && (error.message.includes("abort") || error.message.includes("timeout"))) {
         status = "sleeping";
         details = "Backend server is waking up...";
       }
@@ -292,72 +264,50 @@ const Contact = () => {
         responseTime,
       });
       
-      if (newRetries <= 3) {
-        const delay = newRetries * 2000;
-        addMessage("info", `Connection attempt ${newRetries}/3. Retrying in ${delay/1000}s...`);
-        
-        setTimeout(() => {
-          if (backendStatus.status !== "connected") {
-            checkBackendConnection();
-          }
-        }, delay);
-      } else {
-        addMessage("warning", "Backend server unavailable. Using email fallback.");
+      // Only show warning after multiple failures
+      if (newRetries >= 2) {
+        addMessage("warning", "Backend server unavailable. Messages will be sent via email.");
       }
     } finally {
       setIsCheckingBackend(false);
     }
-  }, [isCheckingBackend, isOnline, connectionRetries, backendStatus.status]);
+  }, [isCheckingBackend, isOnline, connectionRetries]);
 
   const validateForm = (): boolean => {
     const errors: FormErrors = {};
     let isValid = true;
     
-    const validations = [
-      {
-        field: 'fullname' as keyof FormErrors,
-        value: formData.fullname.trim(),
-        rules: [
-          { condition: !formData.fullname.trim(), message: "Full name is required" },
-          { condition: formData.fullname.trim().length < 2, message: "Full name should be at least 2 characters" },
-          { condition: formData.fullname.trim().length > 100, message: "Full name should not exceed 100 characters" }
-        ]
-      },
-      {
-        field: 'email' as keyof FormErrors,
-        value: formData.email.trim(),
-        rules: [
-          { condition: !formData.email.trim(), message: "Email is required" },
-          { condition: !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email), message: "Please enter a valid email address" }
-        ]
-      },
-      {
-        field: 'address' as keyof FormErrors,
-        value: formData.address.trim(),
-        rules: [
-          { condition: !formData.address.trim(), message: "Address is required" },
-          { condition: formData.address.trim().length < 5, message: "Address should be at least 5 characters" }
-        ]
-      },
-      {
-        field: 'message' as keyof FormErrors,
-        value: formData.message.trim(),
-        rules: [
-          { condition: !formData.message.trim(), message: "Message is required" },
-          { condition: formData.message.trim().length < 10, message: "Message should be at least 10 characters" }
-        ]
-      }
-    ];
+    if (!formData.fullname.trim()) {
+      errors.fullname = "Full name is required";
+      isValid = false;
+    } else if (formData.fullname.trim().length < 2) {
+      errors.fullname = "Full name should be at least 2 characters";
+      isValid = false;
+    }
     
-    validations.forEach(({ field, rules }) => {
-      for (const rule of rules) {
-        if (rule.condition) {
-          errors[field] = rule.message;
-          isValid = false;
-          break;
-        }
-      }
-    });
+    if (!formData.email.trim()) {
+      errors.email = "Email is required";
+      isValid = false;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.email = "Please enter a valid email address";
+      isValid = false;
+    }
+    
+    if (!formData.address.trim()) {
+      errors.address = "Address is required";
+      isValid = false;
+    } else if (formData.address.trim().length < 5) {
+      errors.address = "Address should be at least 5 characters";
+      isValid = false;
+    }
+    
+    if (!formData.message.trim()) {
+      errors.message = "Message is required";
+      isValid = false;
+    } else if (formData.message.trim().length < 10) {
+      errors.message = "Message should be at least 10 characters";
+      isValid = false;
+    }
     
     setFormErrors(errors);
     
@@ -405,7 +355,7 @@ const Contact = () => {
   const submitToBackend = async (): Promise<{success: boolean; message: string; data?: any}> => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
 
       const payload = {
         fullname: formData.fullname.trim(),
@@ -424,7 +374,6 @@ const Contact = () => {
         },
         body: JSON.stringify(payload),
         signal: controller.signal,
-        mode: 'cors',
       });
 
       clearTimeout(timeoutId);
@@ -511,7 +460,7 @@ Timestamp: ${new Date().toISOString()}
           return;
         } else {
           addMessage("warning", 
-            `Backend submission failed: ${result.message}. Trying email fallback...`
+            `Backend submission failed. Trying email fallback...`
           );
         }
       }
@@ -520,9 +469,7 @@ Timestamp: ${new Date().toISOString()}
       openEmailFallback();
       
       addMessage("info", 
-        backendStatus.status === "connected" 
-          ? "Opened email client as fallback."
-          : "Backend unavailable. Opened email client."
+        "Opened email client. Please send your message from there."
       );
       
       // Reset form after fallback
@@ -537,7 +484,6 @@ Timestamp: ${new Date().toISOString()}
       setFormErrors({});
       
     } catch (error: unknown) {
-      console.error("❌ Form submission error:", error);
       addMessage("error", 
         "Failed to submit form. Please try again or email directly at adityaauchar40@gmail.com"
       );
@@ -680,7 +626,7 @@ Timestamp: ${new Date().toISOString()}
                   I am currently open to new opportunities and collaborative projects where I can contribute my skills and experience in full-stack development. Let's connect and build something great together.
                 </p>
 
-                <div className="space-y-4">
+                <div className="space-y-4 mb-8">
                   {contactInfo.map((item, index) => (
                     <div
                       key={index}
@@ -712,7 +658,7 @@ Timestamp: ${new Date().toISOString()}
                   ))}
                 </div>
 
-                {/* Connection Status */}
+                {/* Connection Status - Simplified */}
                 <div className="mt-8 p-4 rounded-2xl bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -732,7 +678,7 @@ Timestamp: ${new Date().toISOString()}
                            backendStatus.status === "sleeping" ? "Connecting..." : "Offline"}
                         </div>
                         <div className="text-sm text-gray-600">
-                          {backendStatus.details}
+                          {backendStatus.status === "connected" ? "Ready to send messages" : "Using email fallback"}
                         </div>
                       </div>
                     </div>
@@ -758,10 +704,7 @@ Timestamp: ${new Date().toISOString()}
                       Send Me a <span className="bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">Message</span>
                     </h3>
                     <p className="text-gray-600">
-                      {backendStatus.status === "connected" 
-                        ? "Your message will be saved to the database"
-                        : "Your message will be sent via email"
-                      }
+                      Fill out the form below and I'll get back to you as soon as possible.
                     </p>
                   </div>
                 </div>
@@ -959,7 +902,7 @@ Timestamp: ${new Date().toISOString()}
                       ) : (
                         <>
                           <SendIcon className="group-hover:animate-gentle-float" />
-                          <span>{getSubmitButtonText()}</span>
+                          <span>Send Message</span>
                           <div className="group-hover:translate-x-2 transition-transform duration-300">→</div>
                         </>
                       )}
