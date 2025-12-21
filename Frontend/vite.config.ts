@@ -14,28 +14,15 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
     ],
     
-    // Base URL for Render deployment
     base: '/',
     
-    // Build configuration
     build: {
       outDir: 'dist',
       sourcemap: false,
-      minify: isProduction ? 'terser' : false,
       emptyOutDir: true,
+      minify: isProduction ? 'terser' : false,
       rollupOptions: {
-        input: {
-          main: resolve(__dirname, 'index.html'),
-        },
-
- minify: 'esbuild', 
-    esbuild: {
-      minifyIdentifiers: true,
-      minifySyntax: true,
-      minifyWhitespace: true,
-    },
-        
-      output: {
+        output: {
           manualChunks: {
             'react-vendor': ['react', 'react-dom', 'react-router-dom'],
             'mui-vendor': ['@mui/material', '@mui/icons-material', '@emotion/react', '@emotion/styled'],
@@ -54,31 +41,25 @@ export default defineConfig(({ mode }) => {
       },
     },
     
-    // Server configuration
     server: {
       port: 3000,
       host: true,
     },
     
-    // Preview server for Render
     preview: {
       port: 3000,
       host: true,
     },
     
-    // Resolve configuration
     resolve: {
       alias: {
         '@': resolve(__dirname, './src'),
-        '@components': resolve(__dirname, './src/components'),
       },
     },
     
-    // Define global constants
     define: {
       'import.meta.env.VITE_API_URL': JSON.stringify(env.VITE_API_URL || 'https://protfolio-backend-8p47.onrender.com'),
       'import.meta.env.VITE_FRONTEND_URL': JSON.stringify(env.VITE_FRONTEND_URL || 'https://protfolio-frontend-ytfj.onrender.com'),
-      'import.meta.env.VITE_NODE_ENV': JSON.stringify(mode),
     },
   };
 });

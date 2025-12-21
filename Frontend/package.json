@@ -1,6 +1,6 @@
 {
   "name": "protfolio-frontend",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -23,6 +23,7 @@
     "react-router-dom": "^7.6.0",
     "react-type-animation": "^3.2.0",
     "tailwindcss": "^4.1.7",
+    "terser": "^5.44.1",
     "vite": "^6.3.5"
   },
   "devDependencies": {
