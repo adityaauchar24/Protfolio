@@ -77,11 +77,18 @@ const Contact = () => {
   const [characterCount, setCharacterCount] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
+  const [showSubmissionMessage, setShowSubmissionMessage] = useState(false);
+  const [submissionMessage, setSubmissionMessage] = useState("");
+  const [submissionMessageType, setSubmissionMessageType] = useState<"success" | "error" | "info" | "warning">("info");
+  const [retryCount, setRetryCount] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
   
   const sectionRef = useRef<HTMLElement>(null);
   const checkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingTimeoutRef = useRef<{[key: string]: ReturnType<typeof setTimeout>}>({});
   const formRef = useRef<HTMLFormElement>(null);
+  const submissionMessageRef = useRef<HTMLDivElement>(null);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Detect device type for responsive behavior
   useEffect(() => {
@@ -123,6 +130,7 @@ const Contact = () => {
       if (element) observer.unobserve(element);
       if (checkTimeoutRef.current) clearTimeout(checkTimeoutRef.current);
       Object.values(typingTimeoutRef.current).forEach(clearTimeout);
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
     };
   }, [isMobile, isTablet]);
 
@@ -138,7 +146,7 @@ const Contact = () => {
     
     const handleOffline = () => {
       setIsOnline(false);
-      addMessage("error", "Network connection lost. Working in offline mode.");
+      addMessage("error", "Network connection lost. Please reconnect to submit messages.");
     };
 
     window.addEventListener('online', handleOnline);
@@ -159,6 +167,26 @@ const Contact = () => {
       return () => clearTimeout(timer);
     }
   }, [message, isMobile]);
+
+  // Auto dismissal for submission message
+  useEffect(() => {
+    if (showSubmissionMessage) {
+      const timer = setTimeout(() => {
+        setShowSubmissionMessage(false);
+      }, isMobile ? 5000 : 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [showSubmissionMessage, isMobile]);
+
+  // Scroll to submission message when it appears
+  useEffect(() => {
+    if (showSubmissionMessage && submissionMessageRef.current && isMobile) {
+      submissionMessageRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+    }
+  }, [showSubmissionMessage, isMobile]);
 
   // Initial backend check on mount with responsive delay
   useEffect(() => {
@@ -262,6 +290,7 @@ const Contact = () => {
         });
         
         setConnectionRetries(0);
+        setRetryCount(0);
       } else {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -288,7 +317,7 @@ const Contact = () => {
       
       // Only show warning after multiple failures
       if (newRetries >= 2) {
-        addMessage("warning", "Backend server unavailable. Messages will be sent via email.");
+        addMessage("warning", "Backend server is currently unavailable. Please try again later.");
       }
     } finally {
       setIsCheckingBackend(false);
@@ -334,7 +363,7 @@ const Contact = () => {
     setFormErrors(errors);
     
     if (!isValid) {
-      addMessage("error", "Please fix the validation errors above");
+      showFormMessage("error", "Please fix the validation errors above");
     }
     
     return isValid;
@@ -392,18 +421,31 @@ const Contact = () => {
         company: formData.company?.trim() || undefined,
         projectType: formData.projectType,
         timestamp: new Date().toISOString(),
+        source: "portfolio_website",
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
       };
 
       const response = await fetch(`${API_URL}/api/contact`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Accept": "application/json",
         },
         body: JSON.stringify(payload),
         signal: controller.signal,
+        mode: 'cors',
+        credentials: 'same-origin',
       });
 
       clearTimeout(timeoutId);
+      
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Server returned non-JSON response");
+      }
+      
       const data = await response.json();
       
       if (response.ok) {
@@ -413,47 +455,90 @@ const Contact = () => {
           data 
         };
       } else {
-        return { 
-          success: false, 
-          message: data.error || data.message || "Submission failed",
-          data 
-        };
+        // Handle specific HTTP status codes
+        if (response.status === 400) {
+          return {
+            success: false,
+            message: data.error || data.message || "Invalid form data. Please check your inputs."
+          };
+        } else if (response.status === 429) {
+          return {
+            success: false,
+            message: "Too many requests. Please try again in a few minutes."
+          };
+        } else if (response.status >= 500) {
+          return {
+            success: false,
+            message: "Server error. Please try again later."
+          };
+        } else {
+          return { 
+            success: false, 
+            message: data.error || data.message || `Submission failed (HTTP ${response.status})`
+          };
+        }
       }
     } catch (error) {
+      // Handle specific error types
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          return {
+            success: false,
+            message: "Request timeout. The server is taking too long to respond."
+          };
+        }
+        if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
+          return {
+            success: false,
+            message: "Network error. Please check your internet connection."
+          };
+        }
+        return {
+          success: false,
+          message: error.message
+        };
+      }
       return { 
         success: false, 
-        message: error instanceof Error ? error.message : "Network error occurred" 
+        message: "An unexpected error occurred. Please try again."
       };
     }
   };
 
-  const openEmailFallback = (): void => {
-    const subject = `Portfolio Contact from ${formData.fullname.trim()}`;
-    const body = `
-Name: ${formData.fullname.trim()}
-Email: ${formData.email.trim()}
-Address: ${formData.address.trim()}
-Company: ${formData.company?.trim() || 'Not provided'}
-Project Type: ${formData.projectType}
-
-Message:
-${formData.message.trim()}
-
----
-Sent from Portfolio Contact Form
-Timestamp: ${new Date().toISOString()}
-    `.trim();
-
-    const mailtoLink = `mailto:adityaauchar40@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const retryBackendConnection = async (): Promise<void> => {
+    if (isRetrying) return;
     
-    window.open(mailtoLink, '_blank');
+    setIsRetrying(true);
+    setRetryCount(prev => prev + 1);
+    
+    showFormMessage("info", `Attempting to reconnect... (Attempt ${retryCount + 1})`);
+    
+    try {
+      await checkBackendConnection();
+      
+      if (backendStatus.status === "connected") {
+        showFormMessage("success", "Backend reconnected! You can now submit your message.");
+      } else {
+        showFormMessage("warning", "Still unable to connect. Please try again later.");
+      }
+    } catch (error) {
+      showFormMessage("error", "Reconnection failed. Please check your network connection.");
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
+  const showFormMessage = (type: "success" | "error" | "info" | "warning", message: string) => {
+    setSubmissionMessage(message);
+    setSubmissionMessageType(type);
+    setShowSubmissionMessage(true);
   };
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     
     if (!isOnline) {
-      addMessage("error", "You are offline. Please check your internet connection.");
+      showFormMessage("error", "You are offline. Please check your internet connection and try again.");
       return;
     }
     
@@ -461,61 +546,55 @@ Timestamp: ${new Date().toISOString()}
       return;
     }
 
+    // Check if backend is connected before submitting
+    if (backendStatus.status !== "connected") {
+      showFormMessage("error", "Backend server is not available. Please try again later.");
+      addMessage("warning", "Server connection required to send messages.");
+      return;
+    }
+
     setIsSubmitting(true);
-    addMessage("info", "Sending your message...");
+    showFormMessage("info", "Sending your message to the database...");
 
     try {
-      // Try backend first if connected
-      if (backendStatus.status === "connected") {
-        const result = await submitToBackend();
+      const result = await submitToBackend();
+      
+      if (result.success) {
+        showFormMessage("success", 
+          `✅ ${result.message} Your message has been saved to the database. I'll get back to you soon!`
+        );
         
-        if (result.success) {
-          addMessage("success", 
-            `${result.message} I'll get back to you soon!`
-          );
-          
-          // Reset form
-          setFormData({
-            fullname: "",
-            email: "",
-            address: "",
-            message: "",
-            company: "",
-            projectType: "general"
-          });
-          setFormErrors({});
-          setCharacterCount(0);
-          return;
-        } else {
-          addMessage("warning", 
-            `Backend submission failed. Trying email fallback...`
-          );
+        // Also show a toast notification
+        addMessage("success", "Message successfully saved to database!");
+        
+        // Reset form
+        setFormData({
+          fullname: "",
+          email: "",
+          address: "",
+          message: "",
+          company: "",
+          projectType: "general"
+        });
+        setFormErrors({});
+        setCharacterCount(0);
+        setRetryCount(0);
+      } else {
+        // Handle submission failure
+        showFormMessage("error", `❌ ${result.message}`);
+        
+        // If it's a network/server error, suggest retrying
+        if (result.message.includes("Network") || 
+            result.message.includes("Server") || 
+            result.message.includes("timeout")) {
+          showFormMessage("warning", "Please try again in a moment or check your connection.");
         }
       }
-      
-      // Fallback to email
-      openEmailFallback();
-      
-      addMessage("info", 
-        "Opened email client. Please send your message from there."
-      );
-      
-      // Reset form after fallback
-      setFormData({
-        fullname: "",
-        email: "",
-        address: "",
-        message: "",
-        company: "",
-        projectType: "general"
-      });
-      setFormErrors({});
-      setCharacterCount(0);
-      
     } catch (error: unknown) {
-      addMessage("error", 
-        "Failed to submit form. Please try again or email directly at adityaauchar40@gmail.com"
+      showFormMessage("error", 
+        "❌ An unexpected error occurred. Please try again later."
       );
+      console.error("Submission error:", error);
     } finally {
       setIsSubmitting(false);
     }
@@ -574,16 +653,119 @@ Timestamp: ${new Date().toISOString()}
     );
   };
 
+  const SubmissionMessage = (): JSX.Element | null => {
+    if (!showSubmissionMessage) return null;
+
+    return (
+      <div 
+        ref={submissionMessageRef}
+        className={`
+          w-full
+          px-4 sm:px-6 md:px-8
+          py-3 sm:py-4 md:py-5
+          rounded-lg sm:rounded-xl md:rounded-2xl
+          border
+          shadow-lg
+          transition-all duration-300
+          animate-fadeIn
+          ${submissionMessageType === "success" 
+            ? "bg-green-50/95 border-green-200 text-green-800" 
+            : submissionMessageType === "error"
+            ? "bg-red-50/95 border-red-200 text-red-800"
+            : submissionMessageType === "warning"
+            ? "bg-yellow-50/95 border-yellow-200 text-yellow-800"
+            : "bg-blue-50/95 border-blue-200 text-blue-800"
+          }
+        `}
+      >
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0 mt-0.5">
+            {submissionMessageType === "success" ? (
+              <CheckCircleIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-green-500" />
+            ) : submissionMessageType === "error" ? (
+              <ErrorIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-red-500" />
+            ) : submissionMessageType === "warning" ? (
+              <ErrorIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-yellow-500" />
+            ) : (
+              <div className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-sm sm:text-base md:text-lg mb-1">
+              {submissionMessageType === "success" ? "Message Sent!" : 
+               submissionMessageType === "error" ? "Submission Error" : 
+               submissionMessageType === "warning" ? "Notice" : "Processing..."}
+            </div>
+            <div className="text-xs sm:text-sm md:text-base break-words">{submissionMessage}</div>
+            
+            {/* Show retry option for backend connection errors */}
+            {submissionMessageType === "error" && backendStatus.status !== "connected" && retryCount < 3 && (
+              <button
+                onClick={retryBackendConnection}
+                disabled={isRetrying}
+                className="mt-2 px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              >
+                {isRetrying ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    Retrying...
+                  </>
+                ) : (
+                  "↻ Try Reconnecting"
+                )}
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => setShowSubmissionMessage(false)}
+            className="flex-shrink-0 text-gray-400 hover:text-gray-600 p-1 text-lg sm:text-xl"
+            aria-label="Close message"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const getSubmitButtonText = () => {
     if (isSubmitting) {
-      return backendStatus.status === "connected" ? "Sending..." : "Opening Email...";
+      return "Saving to Database...";
     }
     
-    if (backendStatus.status === "connected") {
-      return "Send Message";
-    } else {
-      return "Send via Email";
+    return "Send Message";
+  };
+
+  const getSubmitButtonStatus = () => {
+    if (!isOnline) {
+      return {
+        text: "Offline",
+        disabled: true,
+        tooltip: "Please connect to the internet"
+      };
     }
+    
+    if (backendStatus.status !== "connected") {
+      return {
+        text: "Server Offline",
+        disabled: true,
+        tooltip: "Backend server is not available"
+      };
+    }
+    
+    if (isSubmitting) {
+      return {
+        text: "Saving...",
+        disabled: true,
+        tooltip: "Saving your message to database"
+      };
+    }
+    
+    return {
+      text: "Send Message",
+      disabled: false,
+      tooltip: "Send message to backend database"
+    };
   };
 
   const handleResetForm = () => {
@@ -597,7 +779,7 @@ Timestamp: ${new Date().toISOString()}
     });
     setFormErrors({});
     setCharacterCount(0);
-    addMessage("info", "Form reset successfully.");
+    showFormMessage("info", "Form reset successfully.");
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -606,6 +788,20 @@ Timestamp: ${new Date().toISOString()}
     }).catch(() => {
       addMessage("error", "Failed to copy to clipboard");
     });
+  };
+
+  const checkConnectionAndSubmit = () => {
+    if (backendStatus.status !== "connected") {
+      showFormMessage("warning", "Checking server connection before submission...");
+      checkBackendConnection().then(() => {
+        if (backendStatus.status === "connected") {
+          // Auto-submit after successful connection check
+          formRef.current?.requestSubmit();
+        } else {
+          showFormMessage("error", "Unable to connect to server. Please try again later.");
+        }
+      });
+    }
   };
 
   return (
@@ -628,6 +824,15 @@ Timestamp: ${new Date().toISOString()}
             from { width: 0; }
             to { width: 100%; }
           }
+          @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.8; }
+            70% { transform: scale(1.2); opacity: 0; }
+            100% { transform: scale(1.2); opacity: 0; }
+          }
           .animate-gentle-float {
             animation: gentle-float 4s ease-in-out infinite;
           }
@@ -639,6 +844,12 @@ Timestamp: ${new Date().toISOString()}
           }
           .animate-line-expand-reverse {
             animation: line-expand-reverse 0.8s ease-out forwards;
+          }
+          .animate-fadeIn {
+            animation: fadeIn 0.3s ease-out forwards;
+          }
+          .animate-pulse-ring {
+            animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
           }
           
           /* Mobile optimizations */
@@ -769,7 +980,10 @@ Timestamp: ${new Date().toISOString()}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0">
                     <div className="flex items-center gap-2 sm:gap-3">
                       {backendStatus.status === "connected" ? (
-                        <CloudIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-green-500" />
+                        <div className="relative">
+                          <CloudIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-green-500 relative z-10" />
+                          <div className="absolute inset-0 w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 bg-green-500 rounded-full animate-pulse-ring"></div>
+                        </div>
                       ) : backendStatus.status === "checking" ? (
                         <div className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                       ) : backendStatus.status === "sleeping" ? (
@@ -779,12 +993,12 @@ Timestamp: ${new Date().toISOString()}
                       )}
                       <div>
                         <div className="font-semibold text-sm sm:text-base text-gray-800">
-                          {backendStatus.status === "connected" ? "Online" : 
+                          {backendStatus.status === "connected" ? "Database Connected" : 
                            backendStatus.status === "checking" ? "Checking..." :
-                           backendStatus.status === "sleeping" ? "Connecting..." : "Offline"}
+                           backendStatus.status === "sleeping" ? "Connecting..." : "Database Offline"}
                         </div>
                         <div className="text-xs sm:text-sm text-gray-600">
-                          {backendStatus.status === "connected" ? "Ready to send messages" : "Using email fallback"}
+                          {backendStatus.status === "connected" ? "Ready to save messages" : "Cannot save messages"}
                         </div>
                       </div>
                     </div>
@@ -796,7 +1010,28 @@ Timestamp: ${new Date().toISOString()}
                         </span>
                       </div>
                     )}
+                    {backendStatus.status !== "connected" && isOnline && (
+                      <button
+                        onClick={retryBackendConnection}
+                        disabled={isRetrying}
+                        className="px-2 sm:px-3 py-1 sm:py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-full text-xs font-medium text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                      >
+                        {isRetrying ? (
+                          <>
+                            <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                            <span className="hidden sm:inline">Retrying...</span>
+                          </>
+                        ) : (
+                          "↻ Retry"
+                        )}
+                      </button>
+                    )}
                   </div>
+                  {backendStatus.responseTime && backendStatus.status === "connected" && (
+                    <div className="mt-2 text-xs text-gray-500">
+                      Response time: {backendStatus.responseTime}ms
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -809,9 +1044,16 @@ Timestamp: ${new Date().toISOString()}
                     Send Me a <span className="bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">Message</span>
                   </h3>
                   <p className="text-xs sm:text-sm md:text-base lg:text-lg text-gray-600">
-                    Fill out the form below and I'll get back to you as soon as possible.
+                    Fill out the form below and your message will be saved directly to our database.
                   </p>
                 </div>
+
+                {/* Submission Message - Aligned to form */}
+                {showSubmissionMessage && (
+                  <div className="mb-4 sm:mb-5 md:mb-6 animate-fadeIn">
+                    <SubmissionMessage />
+                  </div>
+                )}
 
                 <form ref={formRef} onSubmit={handleSubmit} className="space-y-3 sm:space-y-4 md:space-y-5 lg:space-y-6">
                   {/* Name & Email - Responsive Grid */}
@@ -1005,7 +1247,7 @@ Timestamp: ${new Date().toISOString()}
                   <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 md:gap-4 pt-3 sm:pt-4 md:pt-5 lg:pt-6">
                     <button
                       type="submit"
-                      disabled={isSubmitting || !isOnline}
+                      disabled={isSubmitting || !isOnline || backendStatus.status !== "connected"}
                       className={`
                         group
                         flex-1
@@ -1017,14 +1259,17 @@ Timestamp: ${new Date().toISOString()}
                         shadow-lg sm:shadow-xl
                         transition-all duration-300
                         disabled:opacity-60 disabled:cursor-not-allowed
-                        bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700
-                        text-white
-                        hover:shadow-xl sm:hover:shadow-2xl
+                        ${backendStatus.status === "connected"
+                          ? "bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white hover:shadow-xl sm:hover:shadow-2xl"
+                          : "bg-gradient-to-r from-gray-400 to-gray-500 text-gray-100 cursor-not-allowed"
+                        }
                         hover:scale-[1.02] active:scale-[0.98]
                         text-xs sm:text-sm md:text-base lg:text-lg
                         touch-manipulation
                         min-h-[40px] sm:min-h-[44px] md:min-h-[48px] lg:min-h-[52px]
+                        relative
                       `}
+                      title={getSubmitButtonStatus().tooltip}
                     >
                       {isSubmitting ? (
                         <>
@@ -1034,8 +1279,10 @@ Timestamp: ${new Date().toISOString()}
                       ) : (
                         <>
                           <SendIcon className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 lg:w-6 lg:h-6 group-hover:animate-gentle-float" />
-                          <span>{getSubmitButtonText()}</span>
-                          <div className="transform transition-transform duration-300 group-hover:translate-x-0.5 sm:group-hover:translate-x-1 md:group-hover:translate-x-2">→</div>
+                          <span>{getSubmitButtonStatus().text}</span>
+                          {backendStatus.status === "connected" && (
+                            <div className="transform transition-transform duration-300 group-hover:translate-x-0.5 sm:group-hover:translate-x-1 md:group-hover:translate-x-2">→</div>
+                          )}
                         </>
                       )}
                     </button>
@@ -1055,10 +1302,15 @@ Timestamp: ${new Date().toISOString()}
                 <div className="mt-4 sm:mt-6 md:mt-8 lg:mt-10 pt-3 sm:pt-4 md:pt-5 lg:pt-6 border-t border-gray-200/50">
                   <div className="text-center text-xs sm:text-sm md:text-base text-gray-500 space-y-0.5 sm:space-y-1">
                     <p className="mb-0.5 sm:mb-1">
-                      Your information is secure and will only be used to respond to your inquiry.
+                      Your message is securely saved to our database. I'll review it and get back to you soon.
                     </p>
-                    <p>
-                      Response time: Usually within 24-48 hours
+                    <p className="flex items-center justify-center gap-1">
+                      <span className="inline-flex items-center gap-0.5">
+                        <CloudIcon className="w-3 h-3 text-green-500" />
+                        <span>Database Storage</span>
+                      </span>
+                      <span className="text-gray-400">•</span>
+                      <span>Response time: Usually within 24-48 hours</span>
                     </p>
                   </div>
                 </div>
@@ -1069,7 +1321,7 @@ Timestamp: ${new Date().toISOString()}
           {/* Footer Section */}
           <div className={`mt-6 sm:mt-8 md:mt-12 lg:mt-16 text-center transition-all duration-1000 delay-500 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
             <p className="text-sm sm:text-base md:text-lg lg:text-xl text-gray-600 mb-1 sm:mb-2">
-              Looking forward to hearing from you! ✨
+              All messages are securely stored in our database ✨
             </p>
             <p className="text-xs sm:text-sm text-gray-500">
               © {new Date().getFullYear()} Aditya Auchar. All rights reserved.
