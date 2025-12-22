@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const Header = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -222,7 +222,7 @@ const Header = () => {
             {!isMobile && (
               <span className={`
                 absolute bottom-0 left-1/2 transform -translate-x-1/2
-                h-0.5 bg-linear-to-r from-red-600 to-red-400
+                h-0.5 bg-gradient-to-r from-red-600 to-red-400
                 transition-all duration-300
                 ${isActive ? 'w-3/4' : 'w-0 group-hover:w-3/4'}
               `} 
@@ -259,6 +259,7 @@ const Header = () => {
         fixed top-0 left-0 right-0 z-50 
         transition-all duration-500 ease-out
         border-b
+        w-full
         ${
           isScrolled 
             ? 'bg-white/95 backdrop-blur-md shadow-sm py-2 sm:py-3 border-gray-200/30' 
@@ -274,11 +275,11 @@ const Header = () => {
       aria-label="Main navigation header"
     >
       {/* Main Header Container */}
-      <div className="container mx-auto px-3 xs:px-4 sm:px-6 lg:px-8 max-w-7xl">
-        <div className="flex items-center justify-between">
+      <div className="container mx-auto px-3 xs:px-4 sm:px-6 lg:px-8 max-w-7xl w-full">
+        <div className="flex items-center justify-between ">
           
           {/* Logo/Brand Section - Left Side */}
-          <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
+          <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
             <div 
               className="
                 flex items-center space-x-1 sm:space-x-2
@@ -288,7 +289,6 @@ const Header = () => {
                 group
                 touch-manipulation
                 min-w-0
-                -ml-50
               "
               onClick={() => handleNavigation('#home')}
               role="button"
@@ -303,15 +303,15 @@ const Header = () => {
             >
               {/* Brand Text */}
               <div className="
-                bg-linear-to-r from-red-700 via-red-600 to-red-500 
+                bg-gradient-to-r from-red-700 via-red-600 to-red-500 
                 bg-clip-text text-transparent 
                 transition-all duration-300 
                 group-hover:scale-105
                 group-active:scale-95
                 flex items-baseline space-x-1
               ">
-                <span className="text-red-700 drop-shadow-sm text-base xs:text-lg sm:text-xl">Dev.</span>
-                <span className="text-gray-900 font-semibold text-sm xs:text-base sm:text-lg truncate">
+                <span className="text-red-700 drop-shadow-sm text-base xs:text-lg sm:text-2xl">Dev.</span>
+                <span className="text-gray-900 font-semibold text-sm xs:text-base sm:text-2xl truncate max-w-[120px] xs:max-w-[140px] sm:max-w-none">
                   Portfolio
                 </span>
               </div>
@@ -321,13 +321,13 @@ const Header = () => {
             <div 
               className="
                 relative
-                w-1.5 h-1.5 xs:w-2 xs:h-2
-                bg-linear-to-r from-green-400 to-green-500 
+                w-1.5 h-1.5 xs:w-2 xs:h-2 sm:w-2.5 sm:h-2.5
+                bg-gradient-to-r from-green-400 to-green-500 
                 rounded-full 
                 shadow-sm
                 hidden xs:block
                 animate-pulse
-                shrink-0
+                flex-shrink-0
               " 
               title="Available for work"
               aria-label="Available for work"
@@ -340,7 +340,7 @@ const Header = () => {
           </div>
 
           {/* Mobile Menu Button - Right Side */}
-          <div className="lg:hidden shrink-0">
+          <div className="lg:hidden flex-shrink-0">
             <button
               className="
                 flex flex-col items-center justify-center
@@ -400,6 +400,7 @@ const Header = () => {
             overflow-hidden
             transition-all duration-500 ease-in-out
             mobile-menu
+            w-full
             ${
               isMobileMenuOpen 
                 ? 'max-h-96 opacity-100 py-3 mt-2' 
@@ -414,6 +415,7 @@ const Header = () => {
             shadow-xl
             border border-gray-200/50
             touch-manipulation
+            w-full
           ">
             <Navigation isMobile={true} />
             
@@ -437,13 +439,83 @@ const Header = () => {
       <style>{`
         /* Extra small devices (phones, 320px and down) */
         @media (max-width: 320px) {
+          .ml-30 {
+            margin-left: 0.5rem;
+          }
+        }
+        
+        /* Small phones (375px and up) */
+        @media (min-width: 375px) {
+          .ml-30 {
+            margin-left: 0.75rem;
+          }
+        }
+        
+        /* Small devices (landscape phones, 576px and up) */
+        @media (min-width: 576px) {
+          .ml-30 {
+            margin-left: 1rem;
+          }
+        }
+        
+        /* Medium devices (tablets, 768px and up) */
+        @media (min-width: 768px) {
+          .ml-30 {
+            margin-left: 1.5rem;
+          }
+        }
+        
+        /* Large devices (desktops, 992px and up) */
+        @media (min-width: 992px) {
+          .ml-30 {
+            margin-left: 2rem;
+          }
+          
+          .ml-220 {
+            margin-left: auto;
+          }
+        }
+        
+        /* Extra large devices (large desktops, 1200px and up) */
+        @media (min-width: 1200px) {
+          .ml-30 {
+            margin-left: 2.5rem;
+          }
+          
+          .ml-220 {
+            margin-left: auto;
+          }
+        }
+        
+        /* 2XL devices (larger desktops, 1536px and up) */
+        @media (min-width: 1536px) {
+          .ml-30 {
+            margin-left: 3rem;
+          }
+        }
+        
+        /* Container responsive padding */
+        @media (max-width: 320px) {
+          .container {
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+          }
+        }
+        
+        @media (min-width: 321px) and (max-width: 375px) {
           .container {
             padding-left: 0.75rem;
             padding-right: 0.75rem;
           }
         }
         
-        /* Small devices (landscape phones, 576px and up) */
+        @media (min-width: 376px) and (max-width: 475px) {
+          .container {
+            padding-left: 1rem;
+            padding-right: 1rem;
+          }
+        }
+        
         @media (min-width: 576px) {
           .container {
             padding-left: 1.5rem;
@@ -451,7 +523,6 @@ const Header = () => {
           }
         }
         
-        /* Medium devices (tablets, 768px and up) */
         @media (min-width: 768px) {
           .container {
             padding-left: 2rem;
@@ -459,34 +530,16 @@ const Header = () => {
           }
         }
         
-        /* Large devices (desktops, 992px and up) */
-        @media (min-width: 992px) {
-          .container {
-            padding-left: 2rem;
-            padding-right: 2rem;
-          }
-        }
-        
-        /* Extra large devices (large desktops, 1200px and up) */
-        @media (min-width: 1200px) {
-          .container {
-            padding-left: 2rem;
-            padding-right: 2rem;
-          }
-        }
-        
-        /* 2XL devices (larger desktops, 1536px and up) */
-        @media (min-width: 1536px) {
-          .container {
-            padding-left: 3rem;
-            padding-right: 3rem;
-          }
-        }
-        
         /* Prevent zoom on mobile devices for inputs */
         @media (max-width: 768px) {
           input, select, textarea {
             font-size: 16px;
+          }
+          
+          /* Ensure touch targets are large enough */
+          a, button {
+            min-height: 44px;
+            min-width: 44px;
           }
         }
         
@@ -506,6 +559,12 @@ const Header = () => {
           .group-hover\\:scale-105:hover {
             transform: none;
           }
+          
+          /* Better touch feedback */
+          a:active, button:active {
+            background-color: rgba(254, 226, 226, 0.5);
+            transform: scale(0.98);
+          }
         }
 
         /* Reduced motion for accessibility */
@@ -516,13 +575,22 @@ const Header = () => {
             transition: none;
             animation: none;
           }
+          
+          * {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+          }
         }
 
         /* Large screen optimization */
         @media (min-width: 1920px) {
-          .header-large {
-            padding-left: 4rem;
-            padding-right: 4rem;
+          .container {
+            max-width: 1800px;
+          }
+          
+          .ml-30 {
+            margin-left: 4rem;
           }
         }
 
@@ -532,6 +600,11 @@ const Header = () => {
             position: relative;
             background: white;
             border-bottom: 1px solid #e5e7eb;
+            box-shadow: none;
+          }
+          
+          .ml-30 {
+            margin-left: 0;
           }
         }
 
@@ -539,6 +612,61 @@ const Header = () => {
         @media (prefers-color-scheme: dark) {
           .header-dark {
             background-color: rgba(255, 255, 255, 0.95);
+          }
+          
+          .mobile-menu-content {
+            background-color: rgba(255, 255, 255, 0.98);
+          }
+        }
+        
+        /* Foldable devices support */
+        @media (max-width: 280px) {
+          .ml-30 {
+            margin-left: 0.25rem;
+          }
+          
+          .brand-text {
+            font-size: 0.75rem;
+          }
+        }
+        
+        /* Landscape orientation for mobile */
+        @media (max-height: 500px) and (orientation: landscape) {
+          .mobile-menu {
+            max-height: 70vh !important;
+            overflow-y: auto;
+          }
+        }
+        
+        /* Very large screens */
+        @media (min-width: 2560px) {
+          .container {
+            max-width: 2400px;
+          }
+          
+          .ml-30 {
+            margin-left: 6rem;
+          }
+        }
+        
+        /* Responsive font sizes for logo */
+        @media (max-width: 360px) {
+          .logo-text {
+            font-size: 0.875rem;
+          }
+        }
+        
+        @media (min-width: 361px) and (max-width: 414px) {
+          .logo-text {
+            font-size: 1rem;
+          }
+        }
+        
+        /* Safe area insets for notched devices */
+        @supports (padding: max(0px)) {
+          .header {
+            padding-left: max(0.75rem, env(safe-area-inset-left));
+            padding-right: max(0.75rem, env(safe-area-inset-right));
           }
         }
       `}</style>

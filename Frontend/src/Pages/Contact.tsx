@@ -74,18 +74,35 @@ const Contact = () => {
     projectType: "general"
   });
   const [typingStatus, setTypingStatus] = useState<{[key: string]: boolean}>({});
+  const [characterCount, setCharacterCount] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
   
   const sectionRef = useRef<HTMLElement>(null);
   const checkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingTimeoutRef = useRef<{[key: string]: ReturnType<typeof setTimeout>}>({});
   const formRef = useRef<HTMLFormElement>(null);
 
+  // Detect device type for responsive behavior
+  useEffect(() => {
+    const checkDevice = () => {
+      const width = window.innerWidth;
+      setIsMobile(width < 768);
+      setIsTablet(width >= 768 && width < 1024);
+    };
+    
+    checkDevice();
+    window.addEventListener('resize', checkDevice);
+    
+    return () => window.removeEventListener('resize', checkDevice);
+  }, []);
+
   // Add message helper function
   const addMessage = (type: Message["type"], mess: string) => {
     setMessage({ type, mess });
   };
 
-  // Setup intersection observer
+  // Setup intersection observer with responsive thresholds
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -93,7 +110,10 @@ const Contact = () => {
           setIsVisible(true);
         }
       },
-      { threshold: 0.3, rootMargin: "50px" }
+      { 
+        threshold: isMobile ? 0.1 : isTablet ? 0.2 : 0.3,
+        rootMargin: isMobile ? "20px" : isTablet ? "40px" : "50px"
+      }
     );
 
     const element = sectionRef.current;
@@ -104,13 +124,16 @@ const Contact = () => {
       if (checkTimeoutRef.current) clearTimeout(checkTimeoutRef.current);
       Object.values(typingTimeoutRef.current).forEach(clearTimeout);
     };
-  }, []);
+  }, [isMobile, isTablet]);
 
   // Online/offline detection
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
       addMessage("success", "Network connection restored.");
+      if (backendStatus.status !== "connected") {
+        checkBackendConnection();
+      }
     };
     
     const handleOffline = () => {
@@ -125,24 +148,24 @@ const Contact = () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []);
+  }, [backendStatus.status]);
 
-  // Auto message dismissal
+  // Auto message dismissal with responsive timing
   useEffect(() => {
     if (message.mess) {
       const timer = setTimeout(() => {
         setMessage({ type: "info", mess: "" });
-      }, 7000);
+      }, isMobile ? 4000 : 7000);
       return () => clearTimeout(timer);
     }
-  }, [message]);
+  }, [message, isMobile]);
 
-  // Initial backend check on mount (only once)
+  // Initial backend check on mount with responsive delay
   useEffect(() => {
     const initialCheck = () => {
       setTimeout(() => {
         checkBackendConnection();
-      }, 1000);
+      }, isMobile ? 1500 : 1000);
     };
 
     initialCheck();
@@ -153,29 +176,29 @@ const Contact = () => {
         checkTimeoutRef.current = null;
       }
     };
-  }, []);
+  }, [isMobile]);
 
   const contactInfo: ContactInfo[] = [
     { 
       title: "Email", 
       detail: "adityaauchar40@gmail.com", 
-      icon: <EmailIcon sx={{ fontSize: "1.5rem" }} />,
-      color: "from-blue-500 to-cyan-400",
+      icon: <EmailIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />,
+      color: "from-blue-500 to-cyan-500",
       link: "mailto:adityaauchar40@gmail.com",
       description: "Direct email for inquiries"
     },
     { 
       title: "Phone", 
       detail: "+91 8097459014", 
-      icon: <LocalPhoneIcon sx={{ fontSize: "1.5rem" }} />,
-      color: "from-green-500 to-emerald-400",
+      icon: <LocalPhoneIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />,
+      color: "from-green-500 to-emerald-500",
       link: "tel:+918097459014",
       description: "Available for calls"
     },
     {
       title: "LinkedIn",
       detail: "aditya-auchar-390147334",
-      icon: <LinkedInIcon sx={{ fontSize: "1.5rem" }} />,
+      icon: <LinkedInIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />,
       color: "from-blue-600 to-blue-400",
       link: "https://www.linkedin.com/in/aditya-auchar-390147334/",
       description: "Professional network"
@@ -183,8 +206,8 @@ const Contact = () => {
     {
       title: "Location",
       detail: "Airoli, Navi Mumbai",
-      icon: <LocationPinIcon sx={{ fontSize: "1.5rem" }} />,
-      color: "from-purple-500 to-pink-400",
+      icon: <LocationPinIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />,
+      color: "from-purple-500 to-pink-500",
       link: "https://maps.google.com/?q=Airoli,Navi+Mumbai",
       description: "Based in Maharashtra, India"
     },
@@ -214,9 +237,8 @@ const Contact = () => {
         details: "Establishing connection...",
       }));
 
-      // Simplified fetch without problematic headers
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), isMobile ? 8000 : 5000);
 
       const response = await fetch(`${API_URL}/api/health`, {
         method: 'GET',
@@ -271,7 +293,7 @@ const Contact = () => {
     } finally {
       setIsCheckingBackend(false);
     }
-  }, [isCheckingBackend, isOnline, connectionRetries]);
+  }, [isCheckingBackend, isOnline, connectionRetries, isMobile]);
 
   const validateForm = (): boolean => {
     const errors: FormErrors = {};
@@ -321,6 +343,11 @@ const Contact = () => {
   const handleFormChange = (field: keyof ContactForm, value: string): void => {
     setFormData(prev => ({ ...prev, [field]: value }));
     
+    // Update character count for message field
+    if (field === 'message') {
+      setCharacterCount(value.length);
+    }
+    
     // Clear error for this field
     if (formErrors[field as keyof FormErrors]) {
       setFormErrors(prev => ({ ...prev, [field as keyof FormErrors]: "" }));
@@ -355,7 +382,7 @@ const Contact = () => {
   const submitToBackend = async (): Promise<{success: boolean; message: string; data?: any}> => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), isMobile ? 15000 : 10000);
 
       const payload = {
         fullname: formData.fullname.trim(),
@@ -419,7 +446,7 @@ Timestamp: ${new Date().toISOString()}
 
     const mailtoLink = `mailto:adityaauchar40@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     
-    window.location.href = mailtoLink;
+    window.open(mailtoLink, '_blank');
   };
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
@@ -457,6 +484,7 @@ Timestamp: ${new Date().toISOString()}
             projectType: "general"
           });
           setFormErrors({});
+          setCharacterCount(0);
           return;
         } else {
           addMessage("warning", 
@@ -482,6 +510,7 @@ Timestamp: ${new Date().toISOString()}
         projectType: "general"
       });
       setFormErrors({});
+      setCharacterCount(0);
       
     } catch (error: unknown) {
       addMessage("error", 
@@ -497,14 +526,15 @@ Timestamp: ${new Date().toISOString()}
 
     return (
       <div className={`
-        fixed top-24 right-6 z-50
-        flex items-center gap-3
-        px-6 py-4
-        rounded-2xl
-        shadow-2xl
+        fixed top-4 sm:top-6 right-2 sm:right-4 md:right-6 z-50
+        flex items-start sm:items-center gap-3
+        px-4 sm:px-5 py-3 sm:py-4
+        rounded-lg sm:rounded-xl md:rounded-2xl
+        shadow-lg sm:shadow-xl
         border-l-4
         backdrop-blur-md
         transform transition-all duration-500 ease-out
+        w-[calc(100vw-1rem)] sm:w-auto sm:max-w-md
         ${message.type === "success" 
           ? "bg-green-50/95 border-green-500 text-green-800" 
           : message.type === "error"
@@ -513,27 +543,33 @@ Timestamp: ${new Date().toISOString()}
           ? "bg-yellow-50/95 border-yellow-500 text-yellow-800"
           : "bg-blue-50/95 border-blue-500 text-blue-800"
         }
-        max-w-md
       `}>
-        <div className="flex-shrink-0">
+        <div className="flex-shrink-0 mt-0.5 sm:mt-0">
           {message.type === "success" ? (
-            <CheckCircleIcon sx={{ fontSize: "1.5rem" }} className="text-green-500" />
+            <CheckCircleIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-green-500" />
           ) : message.type === "error" ? (
-            <ErrorIcon sx={{ fontSize: "1.5rem" }} className="text-red-500" />
+            <ErrorIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-red-500" />
           ) : message.type === "warning" ? (
-            <ErrorIcon sx={{ fontSize: "1.5rem" }} className="text-yellow-500" />
+            <ErrorIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-yellow-500" />
           ) : (
-            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="font-semibold truncate">
+          <div className="font-semibold text-sm sm:text-base md:text-lg truncate">
             {message.type === "success" ? "Success!" : 
              message.type === "error" ? "Error!" : 
              message.type === "warning" ? "Warning!" : "Processing..."}
           </div>
-          <div className="text-sm break-words mt-1">{message.mess}</div>
+          <div className="text-xs sm:text-sm md:text-base break-words mt-0.5 sm:mt-1">{message.mess}</div>
         </div>
+        <button
+          onClick={() => setMessage({ type: "info", mess: "" })}
+          className="flex-shrink-0 text-gray-400 hover:text-gray-600 p-1 text-lg sm:text-xl"
+          aria-label="Close message"
+        >
+          ×
+        </button>
       </div>
     );
   };
@@ -560,6 +596,7 @@ Timestamp: ${new Date().toISOString()}
       projectType: "general"
     });
     setFormErrors({});
+    setCharacterCount(0);
     addMessage("info", "Form reset successfully.");
   };
 
@@ -583,74 +620,143 @@ Timestamp: ${new Date().toISOString()}
             0%, 100% { opacity: 0.4; transform: scale(1); }
             50% { opacity: 0.6; transform: scale(1.05); }
           }
+          @keyframes line-expand {
+            from { width: 0; }
+            to { width: 100%; }
+          }
+          @keyframes line-expand-reverse {
+            from { width: 0; }
+            to { width: 100%; }
+          }
           .animate-gentle-float {
             animation: gentle-float 4s ease-in-out infinite;
           }
           .animate-soft-pulse {
             animation: soft-pulse 6s ease-in-out infinite;
           }
+          .animate-line-expand {
+            animation: line-expand 0.8s ease-out forwards;
+          }
+          .animate-line-expand-reverse {
+            animation: line-expand-reverse 0.8s ease-out forwards;
+          }
+          
+          /* Mobile optimizations */
+          @media (max-width: 640px) {
+            input, textarea, select {
+              font-size: 16px !important;
+            }
+            
+            .container {
+              padding-left: 1rem !important;
+              padding-right: 1rem !important;
+            }
+          }
+          
+          /* Tablet optimizations */
+          @media (min-width: 768px) and (max-width: 1023px) {
+            .container {
+              max-width: 100% !important;
+              padding-left: 2rem !important;
+              padding-right: 2rem !important;
+            }
+          }
+          
+          /* Touch-friendly buttons for mobile */
+          @media (hover: none) and (pointer: coarse) {
+            button, a, .cursor-pointer {
+              min-height: 44px;
+              min-width: 44px;
+            }
+            
+            input, textarea, select {
+              font-size: 16px;
+            }
+          }
+          
+          /* Safe area insets for notched devices */
+          @supports (padding: max(0px)) {
+            .safe-area-padding {
+              padding-left: max(1rem, env(safe-area-inset-left));
+              padding-right: max(1rem, env(safe-area-inset-right));
+            }
+          }
+          
+          /* Prevent zoom on input focus for iOS */
+          @media (max-width: 768px) {
+            input, textarea, select {
+              font-size: 16px;
+            }
+          }
         `}
       </style>
 
-      <section id="contact" ref={sectionRef} className="relative overflow-hidden py-16 lg:py-24 bg-gradient-to-b from-gray-50/50 to-white">
-        {/* Background animations */}
-        <div className="absolute top-0 left-0 w-72 h-72 bg-gradient-to-r from-blue-100 to-cyan-100 rounded-full mix-blend-multiply opacity-30 animate-soft-pulse blur-xl"></div>
-        <div className="absolute bottom-0 right-0 w-72 h-72 bg-gradient-to-r from-cyan-100 to-teal-100 rounded-full mix-blend-multiply opacity-30 animate-soft-pulse delay-2000 blur-xl"></div>
+      <section 
+        id="contact" 
+        ref={sectionRef} 
+        className="relative overflow-hidden py-8 sm:py-10 md:py-12 lg:py-16 xl:py-20 bg-gradient-to-b from-gray-50/50 to-white safe-area-padding"
+      >
+        {/* Background animations - Responsive sizing */}
+        <div className="absolute top-0 left-0 w-32 h-32 sm:w-40 sm:h-40 md:w-56 md:h-56 lg:w-72 lg:h-72 xl:w-80 xl:h-80 bg-gradient-to-r from-blue-100 to-cyan-100 rounded-full mix-blend-multiply opacity-20 sm:opacity-25 md:opacity-30 animate-soft-pulse blur-xl md:blur-2xl"></div>
+        <div className="absolute bottom-0 right-0 w-32 h-32 sm:w-40 sm:h-40 md:w-56 md:h-56 lg:w-72 lg:h-72 xl:w-80 xl:h-80 bg-gradient-to-r from-cyan-100 to-teal-100 rounded-full mix-blend-multiply opacity-20 sm:opacity-25 md:opacity-30 animate-soft-pulse delay-2000 blur-xl md:blur-2xl"></div>
         
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className={`text-center mb-16 transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-            <div className="inline-flex items-center gap-3 mb-4">
-              <div className="w-8 h-1 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-full"></div>
-              <span className="text-sm font-semibold text-blue-600 uppercase tracking-wider bg-gradient-to-r from-blue-50 to-cyan-50 px-4 py-2 rounded-full shadow-sm border border-blue-100">
+        <div className="container mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 relative z-10">
+          {/* Section Header */}
+          <div className={`text-center mb-8 sm:mb-10 md:mb-12 lg:mb-16 xl:mb-20 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+            <div className="inline-flex items-center gap-2 sm:gap-3 md:gap-4 mb-3 sm:mb-4 md:mb-5">
+              <div className="w-4 sm:w-5 md:w-6 h-0.5 bg-gradient-to-r from-red-600 to-red-400"></div>
+              <span className="text-xs sm:text-sm md:text-base font-semibold text-red-600 uppercase tracking-wider">
                 Get In Touch
               </span>
-              <div className="w-8 h-1 bg-gradient-to-r from-cyan-400 to-blue-400 rounded-full"></div>
+              <div className="w-4 sm:w-5 md:w-6 h-0.5 bg-gradient-to-r from-red-600 to-red-400"></div>
             </div>
-            <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-4 bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-              Let's Work Together
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-5xl font-bold text-gray-900 mb-3 sm:mb-4 px-2 sm:px-4">
+              <span className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-700 bg-clip-text text-transparent">
+                Let's Work <span className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-700 bg-clip-text text-transparent">Together</span>
+              </span>
             </h2>
-            <p className="text-lg text-gray-600 mt-4 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-sm sm:text-base md:text-lg lg:text-xl text-gray-600 mt-3 sm:mt-4 md:mt-5 max-w-2xl mx-auto px-2 sm:px-4">
               Ready to bring your ideas to life? Let's discuss your project and create something amazing together.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 md:gap-10 lg:gap-12 xl:gap-16">
             {/* Left Column - Contact Info */}
             <div className={`transition-all duration-1000 delay-200 ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-10'}`}>
-              <div className="bg-white/90 backdrop-blur-lg rounded-3xl p-8 lg:p-10 shadow-2xl border border-gray-100/50">
-                <h3 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-6">
+              <div className="bg-white/90 backdrop-blur-lg rounded-3xl p-6 sm:p-8 md:p-10 lg:p-12 shadow-2xl border border-gray-100/50">
+                <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 mb-4 sm:mb-6">
                   Contact <span className="bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">Information</span>
                 </h3>
                 
-                <p className="text-gray-600 text-lg leading-relaxed mb-8">
+                <p className="text-gray-600 text-sm sm:text-base md:text-lg leading-relaxed mb-6 sm:mb-8">
                   I am currently open to new opportunities and collaborative projects where I can contribute my skills and experience in full-stack development. Let's connect and build something great together.
                 </p>
 
-                <div className="space-y-4 mb-8">
+                <div className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
                   {contactInfo.map((item, index) => (
                     <div
                       key={index}
-                      className="group flex items-center gap-4 p-5 rounded-2xl border border-gray-200/80 hover:border-blue-200 bg-white/80 hover:bg-white backdrop-blur-sm transition-all duration-500 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                      className="group flex items-center gap-3 sm:gap-4 p-4 sm:p-5 rounded-xl sm:rounded-2xl border border-gray-200/80 hover:border-blue-200 bg-white/80 hover:bg-white backdrop-blur-sm transition-all duration-500 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                       onClick={() => copyToClipboard(item.detail, item.title)}
                     >
-                      <div className={`p-3 rounded-xl bg-gradient-to-r ${item.color} text-white shadow-md group-hover:shadow-lg transition-all duration-500 animate-gentle-float group-hover:animate-none`}>
+                      <div className={`p-2 sm:p-3 rounded-lg sm:rounded-xl bg-gradient-to-r ${item.color} text-white shadow-md group-hover:shadow-lg transition-all duration-500 animate-gentle-float group-hover:animate-none`}>
                         {item.icon}
                       </div>
-                      <div className="flex-1">
-                        <div className="text-sm font-medium text-gray-500 group-hover:text-gray-600 transition-colors duration-300">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs sm:text-sm font-medium text-gray-500 group-hover:text-gray-600 transition-colors duration-300">
                           {item.title}
                         </div>
-                        <div className="text-gray-800 font-semibold group-hover:text-gray-900 transition-colors duration-300 truncate">
+                        <div className="text-gray-800 font-semibold text-sm sm:text-base md:text-lg group-hover:text-gray-900 transition-colors duration-300 truncate">
                           {item.detail}
                         </div>
                         {item.description && (
-                          <div className="text-xs text-gray-500 mt-1">
+                          <div className="text-xs text-gray-500 mt-0.5 sm:mt-1">
                             {item.description}
                           </div>
                         )}
                       </div>
                       <div className="opacity-0 group-hover:opacity-100 transform translate-x-3 group-hover:translate-x-0 transition-all duration-500 text-blue-500">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                         </svg>
                       </div>
@@ -658,34 +764,34 @@ Timestamp: ${new Date().toISOString()}
                   ))}
                 </div>
 
-                {/* Connection Status - Simplified */}
-                <div className="mt-8 p-4 rounded-2xl bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                {/* Connection Status - Responsive */}
+                <div className="mt-6 sm:mt-8 p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0">
+                    <div className="flex items-center gap-2 sm:gap-3">
                       {backendStatus.status === "connected" ? (
-                        <CloudIcon className="text-green-500" />
+                        <CloudIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-green-500" />
                       ) : backendStatus.status === "checking" ? (
-                        <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                        <div className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                       ) : backendStatus.status === "sleeping" ? (
-                        <SyncIcon className="text-yellow-500 animate-spin" />
+                        <SyncIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-yellow-500 animate-spin" />
                       ) : (
-                        <WifiOffIcon className="text-red-500" />
+                        <WifiOffIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-red-500" />
                       )}
                       <div>
-                        <div className="font-semibold text-gray-800">
+                        <div className="font-semibold text-sm sm:text-base text-gray-800">
                           {backendStatus.status === "connected" ? "Online" : 
                            backendStatus.status === "checking" ? "Checking..." :
                            backendStatus.status === "sleeping" ? "Connecting..." : "Offline"}
                         </div>
-                        <div className="text-sm text-gray-600">
+                        <div className="text-xs sm:text-sm text-gray-600">
                           {backendStatus.status === "connected" ? "Ready to send messages" : "Using email fallback"}
                         </div>
                       </div>
                     </div>
                     {!isOnline && (
-                      <div className="px-3 py-1.5 bg-red-50 border border-red-200 rounded-full">
+                      <div className="px-2 sm:px-3 py-1 sm:py-1.5 bg-red-50 border border-red-200 rounded-full self-start sm:self-auto">
                         <span className="text-xs font-medium text-red-600 flex items-center gap-1">
-                          <WifiOffIcon sx={{ fontSize: "0.8rem" }} />
+                          <WifiOffIcon className="w-3 h-3 sm:w-4 sm:h-4" />
                           Offline
                         </span>
                       </div>
@@ -696,28 +802,30 @@ Timestamp: ${new Date().toISOString()}
             </div>
 
             {/* Right Column - Contact Form */}
-            <div className={`transition-all duration-1000 delay-400 ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10'}`}>
-              <div className="bg-white/90 backdrop-blur-lg rounded-3xl p-8 lg:p-10 shadow-2xl border border-gray-100/50">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h3 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-1">
-                      Send Me a <span className="bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">Message</span>
-                    </h3>
-                    <p className="text-gray-600">
-                      Fill out the form below and I'll get back to you as soon as possible.
-                    </p>
-                  </div>
+            <div className={`transition-all duration-1000 delay-300 ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10'}`}>
+              <div className="bg-white/95 backdrop-blur-lg rounded-xl sm:rounded-2xl md:rounded-3xl p-4 sm:p-5 md:p-6 lg:p-8 xl:p-10 shadow-lg sm:shadow-xl md:shadow-2xl border border-gray-100/50 h-full">
+                <div className="mb-4 sm:mb-5 md:mb-6 lg:mb-8">
+                  <h3 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">
+                    Send Me a <span className="bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">Message</span>
+                  </h3>
+                  <p className="text-xs sm:text-sm md:text-base lg:text-lg text-gray-600">
+                    Fill out the form below and I'll get back to you as soon as possible.
+                  </p>
                 </div>
 
-                <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <form ref={formRef} onSubmit={handleSubmit} className="space-y-3 sm:space-y-4 md:space-y-5 lg:space-y-6">
+                  {/* Name & Email - Responsive Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
                     {['fullname', 'email'].map((field) => (
-                      <div key={field} className="space-y-2">
-                        <label className="block text-sm font-semibold text-gray-700 capitalize">
+                      <div key={field} className="space-y-2 sm:space-y-3">
+                        <label className="block text-xs sm:text-sm md:text-base font-semibold text-gray-700 capitalize">
                           {field === 'fullname' ? 'Full Name' : 'Email Address'}
                           <span className="text-red-500 ml-1">*</span>
                           {typingStatus[field] && (
-                            <span className="ml-2 text-xs text-blue-500 animate-pulse">Typing...</span>
+                            <span className="ml-2 text-xs text-blue-500 animate-pulse flex items-center gap-1">
+                              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping"></div>
+                              <span className="hidden sm:inline">Typing...</span>
+                            </span>
                           )}
                         </label>
                         <input
@@ -726,27 +834,30 @@ Timestamp: ${new Date().toISOString()}
                           value={formData[field as keyof ContactForm] as string}
                           onChange={(e) => handleFormChange(field as keyof ContactForm, e.target.value)}
                           className={`
-                            w-full px-5 py-4
-                            rounded-2xl
+                            w-full px-3 sm:px-4 md:px-5 lg:px-6 py-2.5 sm:py-3 md:py-3.5 lg:py-4
+                            rounded-lg sm:rounded-xl md:rounded-2xl
                             border-2
-                            bg-white/70
+                            bg-white/80
                             backdrop-blur-sm
-                            transition-all duration-300
-                            focus:outline-none focus:ring-4 focus:ring-opacity-20
+                            transition-all duration-200
+                            focus:outline-none focus:ring-2 sm:focus:ring-3 md:focus:ring-4 focus:ring-opacity-20
                             placeholder-gray-400
                             shadow-sm
+                            text-sm sm:text-base md:text-lg
                             ${formErrors[field as keyof FormErrors] 
-                              ? "border-red-200 focus:border-red-400 focus:ring-red-400/20" 
-                              : "border-gray-200/80 focus:border-blue-400 focus:ring-blue-400/20 hover:border-gray-300"
+                              ? "border-red-300 focus:border-red-500 focus:ring-red-500/20" 
+                              : "border-gray-300/80 focus:border-blue-500 focus:ring-blue-500/20 hover:border-gray-400/80"
                             }
-                            disabled:opacity-50 disabled:cursor-not-allowed
+                            disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-100/50
+                            touch-manipulation
                           `}
                           placeholder={getPlaceholderText(field)}
                           disabled={!isOnline || isSubmitting}
+                          autoComplete={field === 'email' ? 'email' : 'name'}
                         />
                         {formErrors[field as keyof FormErrors] && (
-                          <div className="text-red-500 text-sm flex items-center gap-1 animate-pulse">
-                            <ErrorIcon sx={{ fontSize: "1rem" }} />
+                          <div className="text-red-500 text-xs sm:text-sm flex items-center gap-1.5 animate-pulse">
+                            <ErrorIcon className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
                             {formErrors[field as keyof FormErrors]}
                           </div>
                         )}
@@ -754,12 +865,16 @@ Timestamp: ${new Date().toISOString()}
                     ))}
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="block text-sm font-semibold text-gray-700">
+                  {/* Address Field */}
+                  <div className="space-y-2 sm:space-y-3">
+                    <label className="block text-xs sm:text-sm md:text-base font-semibold text-gray-700">
                       Address
                       <span className="text-red-500 ml-1">*</span>
                       {typingStatus.address && (
-                        <span className="ml-2 text-xs text-blue-500 animate-pulse">Typing...</span>
+                        <span className="ml-2 text-xs text-blue-500 animate-pulse flex items-center gap-1">
+                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping"></div>
+                          <span className="hidden sm:inline">Typing...</span>
+                        </span>
                       )}
                     </label>
                     <input
@@ -768,55 +883,60 @@ Timestamp: ${new Date().toISOString()}
                       value={formData.address}
                       onChange={(e) => handleFormChange('address', e.target.value)}
                       className={`
-                        w-full px-5 py-4
-                        rounded-2xl
+                        w-full px-3 sm:px-4 md:px-5 lg:px-6 py-2.5 sm:py-3 md:py-3.5 lg:py-4
+                        rounded-lg sm:rounded-xl md:rounded-2xl
                         border-2
-                        bg-white/70
+                        bg-white/80
                         backdrop-blur-sm
-                        transition-all duration-300
-                        focus:outline-none focus:ring-4 focus:ring-opacity-20
+                        transition-all duration-200
+                        focus:outline-none focus:ring-2 sm:focus:ring-3 md:focus:ring-4 focus:ring-opacity-20
                         placeholder-gray-400
                         shadow-sm
+                        text-sm sm:text-base md:text-lg
                         ${formErrors.address
-                          ? "border-red-200 focus:border-red-400 focus:ring-red-400/20" 
-                          : "border-gray-200/80 focus:border-blue-400 focus:ring-blue-400/20 hover:border-gray-300"
+                          ? "border-red-300 focus:border-red-500 focus:ring-red-500/20" 
+                          : "border-gray-300/80 focus:border-blue-500 focus:ring-blue-500/20 hover:border-gray-400/80"
                         }
-                        disabled:opacity-50 disabled:cursor-not-allowed
+                        disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-100/50
+                        touch-manipulation
                       `}
                       placeholder={getPlaceholderText('address')}
                       disabled={!isOnline || isSubmitting}
+                      autoComplete="street-address"
                     />
                     {formErrors.address && (
-                      <div className="text-red-500 text-sm flex items-center gap-1 animate-pulse">
-                        <ErrorIcon sx={{ fontSize: "1rem" }} />
+                      <div className="text-red-500 text-xs sm:text-sm flex items-center gap-1.5 animate-pulse">
+                        <ErrorIcon className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
                         {formErrors.address}
                       </div>
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-gray-700">
+                  {/* Company & Project Type - Responsive Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
+                    <div className="space-y-2 sm:space-y-3">
+                      <label className="block text-xs sm:text-sm md:text-base font-semibold text-gray-700">
                         Company (Optional)
                       </label>
                       <input
                         type="text"
                         value={formData.company}
                         onChange={(e) => handleFormChange('company', e.target.value)}
-                        className="w-full px-5 py-4 rounded-2xl border-2 border-gray-200/80 bg-white/70 backdrop-blur-sm transition-all duration-300 focus:outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-400/20 placeholder-gray-400 shadow-sm hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full px-3 sm:px-4 md:px-5 lg:px-6 py-2.5 sm:py-3 md:py-3.5 lg:py-4 rounded-lg sm:rounded-xl md:rounded-2xl border-2 border-gray-300/80 bg-white/80 backdrop-blur-sm transition-all duration-200 focus:outline-none focus:border-blue-500 focus:ring-2 sm:focus:ring-3 md:focus:ring-4 focus:ring-blue-500/20 placeholder-gray-400 shadow-sm hover:border-gray-400/80 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-100/50 text-sm sm:text-base md:text-lg touch-manipulation"
                         placeholder={getPlaceholderText('company')}
                         disabled={!isOnline || isSubmitting}
+                        autoComplete="organization"
                       />
                     </div>
                     
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-gray-700">
+                    <div className="space-y-2 sm:space-y-3">
+                      <label className="block text-xs sm:text-sm md:text-base font-semibold text-gray-700">
                         Project Type
                       </label>
                       <select
                         value={formData.projectType}
                         onChange={(e) => handleFormChange('projectType', e.target.value)}
-                        className="w-full px-5 py-4 rounded-2xl border-2 border-gray-200/80 bg-white/70 backdrop-blur-sm transition-all duration-300 focus:outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-400/20 shadow-sm hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed appearance-none"
+                        className="w-full px-3 sm:px-4 md:px-5 lg:px-6 py-2.5 sm:py-3 md:py-3.5 lg:py-4 rounded-lg sm:rounded-xl md:rounded-2xl border-2 border-gray-300/80 bg-white/80 backdrop-blur-sm transition-all duration-200 focus:outline-none focus:border-blue-500 focus:ring-2 sm:focus:ring-3 md:focus:ring-4 focus:ring-blue-500/20 shadow-sm hover:border-gray-400/80 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-100/50 text-sm sm:text-base md:text-lg appearance-none touch-manipulation"
                         disabled={!isOnline || isSubmitting}
                       >
                         {projectTypes.map((type) => (
@@ -828,82 +948,94 @@ Timestamp: ${new Date().toISOString()}
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="block text-sm font-semibold text-gray-700">
-                      Message
-                      <span className="text-red-500 ml-1">*</span>
-                      {typingStatus.message && (
-                        <span className="ml-2 text-xs text-blue-500 animate-pulse">Typing...</span>
-                      )}
-                      <span className="ml-2 text-xs text-gray-500">
-                        {formData.message.length}/2000 characters
+                  {/* Message Field with Character Counter */}
+                  <div className="space-y-2 sm:space-y-3">
+                    <div className="flex justify-between items-center">
+                      <label className="block text-xs sm:text-sm md:text-base font-semibold text-gray-700">
+                        Message
+                        <span className="text-red-500 ml-1">*</span>
+                        {typingStatus.message && (
+                          <span className="ml-2 text-xs text-blue-500 animate-pulse flex items-center gap-1">
+                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping"></div>
+                            <span className="hidden sm:inline">Typing...</span>
+                          </span>
+                        )}
+                      </label>
+                      <span className={`text-xs sm:text-sm font-medium ${characterCount > 1800 ? 'text-red-500' : characterCount > 1500 ? 'text-yellow-500' : 'text-gray-500'}`}>
+                        {characterCount}/2000
                       </span>
-                    </label>
+                    </div>
                     <textarea
-                      rows={6}
+                      rows={isMobile ? 4 : isTablet ? 5 : 6}
                       name="message"
                       value={formData.message}
                       onChange={(e) => handleFormChange('message', e.target.value)}
                       className={`
-                        w-full px-5 py-4
-                        rounded-2xl
+                        w-full px-3 sm:px-4 md:px-5 lg:px-6 py-2.5 sm:py-3 md:py-3.5 lg:py-4
+                        rounded-lg sm:rounded-xl md:rounded-2xl
                         border-2
-                        bg-white/70
+                        bg-white/80
                         backdrop-blur-sm
-                        transition-all duration-300
-                        focus:outline-none focus:ring-4 focus:ring-opacity-20
+                        transition-all duration-200
+                        focus:outline-none focus:ring-2 sm:focus:ring-3 md:focus:ring-4 focus:ring-opacity-20
                         placeholder-gray-400
-                        resize-none
+                        resize-vertical
                         shadow-sm
+                        text-sm sm:text-base md:text-lg
                         ${formErrors.message
-                          ? "border-red-200 focus:border-red-400 focus:ring-red-400/20" 
-                          : "border-gray-200/80 focus:border-blue-400 focus:ring-blue-400/20 hover:border-gray-300"
+                          ? "border-red-300 focus:border-red-500 focus:ring-red-500/20" 
+                          : "border-gray-300/80 focus:border-blue-500 focus:ring-blue-500/20 hover:border-gray-400/80"
                         }
-                        disabled:opacity-50 disabled:cursor-not-allowed
+                        disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-100/50
+                        touch-manipulation
                       `}
                       placeholder={getPlaceholderText('message')}
                       disabled={!isOnline || isSubmitting}
+                      maxLength={2000}
                     />
                     {formErrors.message && (
-                      <div className="text-red-500 text-sm flex items-center gap-1 animate-pulse">
-                        <ErrorIcon sx={{ fontSize: "1rem" }} />
+                      <div className="text-red-500 text-xs sm:text-sm flex items-center gap-1.5 animate-pulse">
+                        <ErrorIcon className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
                         {formErrors.message}
                       </div>
                     )}
                   </div>
 
-                  <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                  {/* Form Buttons - Responsive Stack */}
+                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 md:gap-4 pt-3 sm:pt-4 md:pt-5 lg:pt-6">
                     <button
                       type="submit"
                       disabled={isSubmitting || !isOnline}
                       className={`
                         group
                         flex-1
-                        flex items-center justify-center gap-3
-                        px-8 py-5
+                        flex items-center justify-center gap-1 sm:gap-2 md:gap-3
+                        px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10
+                        py-2.5 sm:py-3 md:py-3.5 lg:py-4 xl:py-5
                         font-bold
-                        rounded-2xl
-                        shadow-lg
-                        transition-all duration-500
-                        disabled:opacity-50 disabled:cursor-not-allowed
+                        rounded-lg sm:rounded-xl md:rounded-2xl
+                        shadow-lg sm:shadow-xl
+                        transition-all duration-300
+                        disabled:opacity-60 disabled:cursor-not-allowed
                         bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700
                         text-white
-                        hover:shadow-xl
-                        hover:scale-[1.02]
-                        active:scale-[0.98]
-                        transform
+                        hover:shadow-xl sm:hover:shadow-2xl
+                        hover:scale-[1.02] active:scale-[0.98]
+                        text-xs sm:text-sm md:text-base lg:text-lg
+                        touch-manipulation
+                        min-h-[40px] sm:min-h-[44px] md:min-h-[48px] lg:min-h-[52px]
                       `}
                     >
                       {isSubmitting ? (
                         <>
-                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <div className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                           <span>{getSubmitButtonText()}</span>
                         </>
                       ) : (
                         <>
-                          <SendIcon className="group-hover:animate-gentle-float" />
-                          <span>Send Message</span>
-                          <div className="group-hover:translate-x-2 transition-transform duration-300">→</div>
+                          <SendIcon className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 lg:w-6 lg:h-6 group-hover:animate-gentle-float" />
+                          <span>{getSubmitButtonText()}</span>
+                          <div className="transform transition-transform duration-300 group-hover:translate-x-0.5 sm:group-hover:translate-x-1 md:group-hover:translate-x-2">→</div>
                         </>
                       )}
                     </button>
@@ -912,23 +1044,36 @@ Timestamp: ${new Date().toISOString()}
                       type="button"
                       onClick={handleResetForm}
                       disabled={isSubmitting}
-                      className="px-6 py-5 rounded-2xl border-2 border-gray-200 bg-white hover:bg-gray-50 font-semibold text-gray-700 transition-all duration-300 hover:border-gray-300 hover:shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-3 sm:px-4 md:px-6 lg:px-8 py-2.5 sm:py-3 md:py-3.5 lg:py-4 rounded-lg sm:rounded-xl md:rounded-2xl border-2 border-gray-300 bg-white hover:bg-gray-50 font-semibold text-gray-700 transition-all duration-300 hover:border-gray-400 hover:shadow disabled:opacity-60 disabled:cursor-not-allowed text-xs sm:text-sm md:text-base lg:text-lg touch-manipulation min-h-[40px] sm:min-h-[44px] md:min-h-[48px] lg:min-h-[52px]"
                     >
                       Reset
                     </button>
                   </div>
                 </form>
 
-                <div className="mt-8 text-center text-xs text-gray-500">
-                  <p className="mb-2">
-                    Your information is secure and will only be used to respond to your inquiry.
-                  </p>
-                  <p>
-                    Response time: Usually within 24-48 hours
-                  </p>
+                {/* Footer Note */}
+                <div className="mt-4 sm:mt-6 md:mt-8 lg:mt-10 pt-3 sm:pt-4 md:pt-5 lg:pt-6 border-t border-gray-200/50">
+                  <div className="text-center text-xs sm:text-sm md:text-base text-gray-500 space-y-0.5 sm:space-y-1">
+                    <p className="mb-0.5 sm:mb-1">
+                      Your information is secure and will only be used to respond to your inquiry.
+                    </p>
+                    <p>
+                      Response time: Usually within 24-48 hours
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Footer Section */}
+          <div className={`mt-6 sm:mt-8 md:mt-12 lg:mt-16 text-center transition-all duration-1000 delay-500 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+            <p className="text-sm sm:text-base md:text-lg lg:text-xl text-gray-600 mb-1 sm:mb-2">
+              Looking forward to hearing from you! ✨
+            </p>
+            <p className="text-xs sm:text-sm text-gray-500">
+              © {new Date().getFullYear()} Aditya Auchar. All rights reserved.
+            </p>
           </div>
         </div>
 
