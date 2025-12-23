@@ -49,8 +49,8 @@ const Projects = () => {
       name: "Tic Tac Toe Game",
       detail: "A modern, interactive Tic Tac Toe game built with React featuring real-time gameplay, win detection, and responsive design. Includes game history and player turn indicators.",
       img: ticTacToeGameImg,
-      gitUrl: "https://github.com/adityaauchar24/Tic-Tac-Toe-Game",
-      liveUrl: "http://localhost:5174/",
+      gitUrl: "https://github.com/adityaauchar24/Tic-Tac-Toe-Games",
+      liveUrl: "https://celadon-parfait-a97379.netlify.app/",
       technologies: ["React.js", "Node.js", "MongoDB", "Redux"],
       category: "Game Development",
       featured: true
