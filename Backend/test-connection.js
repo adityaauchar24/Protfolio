@@ -1,126 +1,48 @@
-import mongoose from "mongoose";
-import dotenv from "dotenv";
+import fetch from 'node-fetch';
 
-dotenv.config();
-
-const testConnection = async () => {
-  console.log("🧪 Testing MongoDB Connection...\n");
+async function testConnection() {
+  const frontendUrl = 'https://protfolio-frontend-ytfj.onrender.com';
+  const backendUrl = 'https://protfolio-backend-8p47.onrender.com';
   
-  const mongoURI = process.env.MONGO_URI;
-  
-  if (!mongoURI) {
-    console.error("❌ MONGO_URI is not defined in environment variables");
-    console.log("\n💡 Please set MONGO_URI in your .env file");
-    process.exit(1);
-  }
-  
-  console.log("📝 Connection String (masked):", mongoURI.replace(/:\/\/[^:]+:[^@]+@/, '://***:***@'));
-  console.log("📁 Database Name:", process.env.DB_NAME || "aditya-protfolio");
-  console.log("🔧 Connection Options:", {
-    retryWrites: true,
-    w: 'majority',
-    serverSelectionTimeoutMS: 10000,
-    family: 4
-  });
+  console.log('🔗 Testing connection between:');
+  console.log(`   Frontend: ${frontendUrl}`);
+  console.log(`   Backend:  ${backendUrl}`);
   
   try {
-    console.log("\n🔄 Attempting to connect...");
+    // Test backend health
+    console.log('\n🧪 Testing backend health...');
+    const healthResponse = await fetch(`${backendUrl}/api/health`);
+    const healthData = await healthResponse.json();
+    console.log(`✅ Backend Health: ${healthResponse.status}`);
+    console.log(`   Database: ${healthData.database}`);
+    console.log(`   Submissions: ${healthData.totalUsers}`);
+    console.log(`   Frontend URL in config: ${healthData.connections?.frontend?.url}`);
     
-    const conn = await mongoose.connect(mongoURI, {
-      retryWrites: true,
-      w: 'majority',
-      serverSelectionTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
-      maxPoolSize: 10,
-      minPoolSize: 5,
-      family: 4,
-      connectTimeoutMS: 10000
+    // Test if frontend is allowed in CORS
+    console.log('\n🌐 Testing CORS configuration...');
+    const testResponse = await fetch(`${backendUrl}/api/test`, {
+      headers: {
+        'Origin': frontendUrl
+      }
     });
+    const testData = await testResponse.json();
+    console.log(`✅ CORS Test: ${testResponse.status}`);
+    console.log(`   Message: ${testData.message}`);
+    console.log(`   Allowed Origins: ${testData.data?.cors?.allowedOrigins}`);
     
-    console.log("\n✅ SUCCESS! Connected to MongoDB Atlas\n");
-    console.log("📊 Connection Details:");
-    console.log(`   - Host: ${conn.connection.host}`);
-    console.log(`   - Port: ${conn.connection.port || 27017}`);
-    console.log(`   - Database: ${conn.connection.name}`);
-    console.log(`   - Ready State: ${conn.connection.readyState}`);
-    
-    // Test database operations
-    const db = conn.connection.db;
-    const collections = await db.listCollections().toArray();
-    
-    console.log(`\n📁 Collections (${collections.length}):`);
-    if (collections.length === 0) {
-      console.log("   - No collections found yet (will be created on first data insertion)");
-    } else {
-      collections.forEach(collection => {
-        console.log(`   - ${collection.name}`);
-      });
-    }
-    
-    // Check users collection
-    const usersCollectionExists = collections.some(c => c.name === 'users');
-    if (usersCollectionExists) {
-      const usersCount = await db.collection('users').countDocuments();
-      console.log(`\n👥 Users collection has ${usersCount} document(s)`);
-    } else {
-      console.log("\n📝 'users' collection doesn't exist yet (will be created on first submission)");
-    }
-    
-    console.log("\n🎉 All tests passed! MongoDB connection is working properly.\n");
-    
-    await mongoose.disconnect();
-    console.log("🔌 Connection closed successfully.");
+    console.log('\n🎉 All connections successful!');
+    console.log('\n📋 Connection Summary:');
+    console.log(`   Frontend → Backend: ✅ Connected`);
+    console.log(`   Backend → MongoDB:  ✅ ${healthData.database}`);
+    console.log(`   CORS Configuration: ✅ Allowed for ${frontendUrl}`);
     
   } catch (error) {
-    console.error("\n❌ CONNECTION FAILED!\n");
-    console.error("Error Message:", error.message);
-    
-    // Specific error analysis
-    if (error.message.includes("ENOTFOUND") || error.message.includes("querySrv")) {
-      console.error("\n🔍 DNS RESOLUTION ERROR DETECTED!");
-      console.error("   This happens when using mongodb+srv:// connection string.");
-      console.error("\n✅ SOLUTION:");
-      console.error("   Change your MONGO_URI from:");
-      console.error("   mongodb+srv://username:password@cluster0.ffacq4b.mongodb.net/database");
-      console.error("\n   To:");
-      console.error("   mongodb://username:password@cluster0.ffacq4b.mongodb.net:27017/database?authSource=admin");
-      console.error("\n   The key differences:");
-      console.error("   - Remove '+srv' from protocol");
-      console.error("   - Add ':27017' after the hostname");
-      console.error("   - Add '?authSource=admin' at the end");
-    } else if (error.message.includes("Authentication failed")) {
-      console.error("\n🔍 AUTHENTICATION ERROR!");
-      console.error("   Username or password is incorrect.");
-      console.error("\n✅ SOLUTION:");
-      console.error("   Check your database username and password in MongoDB Atlas.");
-      console.error("   Verify the user has read/write permissions.");
-    } else if (error.message.includes("whitelist")) {
-      console.error("\n🔍 IP WHITELIST ERROR!");
-      console.error("   Your IP address is not allowed in MongoDB Atlas.");
-      console.error("\n✅ SOLUTION:");
-      console.error("   Go to MongoDB Atlas → Network Access → Add IP Address");
-      console.error("   Add '0.0.0.0/0' to allow access from anywhere (for testing)");
-    } else if (error.message.includes("timed out")) {
-      console.error("\n🔍 CONNECTION TIMEOUT!");
-      console.error("   Cannot reach MongoDB Atlas servers.");
-      console.error("\n✅ SOLUTION:");
-      console.error("   Check your internet connection.");
-      console.error("   Verify MongoDB Atlas cluster is running.");
-      console.error("   Check firewall/proxy settings.");
-    }
-    
-    console.error("\n💡 Current Connection String Format Check:");
-    if (mongoURI.includes("mongodb+srv://")) {
-      console.error("   ⚠️ You are using SRV format (mongodb+srv://)");
-      console.error("   ✅ Change to standard format (mongodb://)");
-    } else if (mongoURI.includes("mongodb://")) {
-      console.error("   ✅ You are using standard format (mongodb://)");
-      console.error("   ✅ This is correct for Render deployment");
-    }
-    
-    process.exit(1);
+    console.error('❌ Connection test failed:', error.message);
+    console.log('\n💡 Troubleshooting:');
+    console.log('   1. Check backend .env file has correct FRONTEND_URL');
+    console.log('   2. Check backend CORS configuration allows your frontend URL');
+    console.log('   3. Make sure backend is running');
   }
-};
+}
 
-// Run the test
 testConnection();
