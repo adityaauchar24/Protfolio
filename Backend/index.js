@@ -10,8 +10,36 @@ import userRoutes from "./Routes/users.js";
 const app = express();
 dotenv.config();
 
-// Connect to MongoDB
-connectDB();
+// Connect to MongoDB with retry logic
+let retryCount = 0;
+const maxRetries = 3;
+let isConnected = false;
+
+const connectWithRetry = async () => {
+  try {
+    await connectDB();
+    isConnected = true;
+    retryCount = 0;
+    console.log("✅ Database connection established successfully!");
+  } catch (error) {
+    console.error(`❌ Database connection attempt ${retryCount + 1} failed:`, error.message);
+    isConnected = false;
+    
+    if (retryCount < maxRetries) {
+      retryCount++;
+      console.log(`🔄 Retrying connection in ${retryCount * 3} seconds... (Attempt ${retryCount}/${maxRetries})`);
+      setTimeout(connectWithRetry, retryCount * 3000);
+    } else {
+      console.error("❌ Failed to connect to database after multiple attempts");
+      console.error("⚠️ Server will start WITHOUT database connection");
+      console.error("💡 Check your MONGO_URI in .env file - make sure it uses mongodb:// (not mongodb+srv://)");
+      console.error("💡 Example correct format: mongodb://username:password@cluster0.ffacq4b.mongodb.net:27017/database?authSource=admin");
+    }
+  }
+};
+
+// Start connection process
+connectWithRetry();
 
 const DEFAULT_PORT = process.env.PORT || 10000;
 
@@ -86,7 +114,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
-  allowedHeaders: ["Content-Type", "Authorization", "Origin", "Accept"],
+  allowedHeaders: ["Content-Type", "Authorization", "Origin", "Accept", "X-Requested-With"],
   optionsSuccessStatus: 200
 };
 
@@ -121,7 +149,7 @@ app.use((req, res, next) => {
     console.log(`📤 ${new Date().toISOString()} ${req.method} ${req.path} ${res.statusCode} - ${responseTime}ms`);
     
     if (res.statusCode >= 400) {
-      console.log(`⚠️ Error Response:`, typeof data === 'string' ? data : JSON.stringify(data));
+      console.log(`⚠️ Error Response:`, typeof data === 'string' ? data.substring(0, 500) : JSON.stringify(data).substring(0, 500));
     }
     
     return originalSend.apply(res, arguments);
@@ -255,7 +283,8 @@ app.get("/api/db-test", async (req, res) => {
         message: "Database not connected",
         error: "MongoDB connection is not established",
         readyState: mongoose.connection.readyState,
-        suggestion: "Check MONGO_URI in .env file and MongoDB Atlas connection"
+        suggestion: "Check MONGO_URI in .env file and MongoDB Atlas connection",
+        note: "Make sure you are using mongodb:// (not mongodb+srv://) in your connection string"
       });
     }
     
@@ -459,6 +488,7 @@ mongoose.connection.on('error', (err) => {
   console.log('   1. Check MongoDB Atlas connection string in .env');
   console.log('   2. Verify network connectivity');
   console.log('   3. Check IP whitelist in MongoDB Atlas');
+  console.log('   4. Ensure you are using mongodb:// (not mongodb+srv://)');
 });
 
 mongoose.connection.on('disconnected', () => {
